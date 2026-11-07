@@ -9,7 +9,7 @@ The whole game is one self-contained HTML file (`index.html`). It loads only Thr
 ## How to play
 
 - **Loadout:** pick a class (swipe or use the arrows) and one of its 3 pieces. Spend 10 stat points, choose a Gamebreaker and build a 16-card deck. Save loadouts in 4 preset slots.
-- **Your turn:** walk up to your SPD in tiles (max 4; a step up costs 2) and play any cards you can afford with Energy, in any order and in as many separate walks as you like. Tap End Turn when you're done.
+- **Your turn:** walk up to your SPD in tiles (a step up costs 2) and play any cards you can afford with Energy, in any order and in as many separate walks as you like. Tap End Turn when you're done.
 - **Cards:** tap a card and the tiles you can target light up. Tap a tile to preview the area, then tap it again (or press Confirm) to play the card.
 - **Gamebreaker:** fill the meter by dealing and taking damage, opening caches and surviving ring closes. Using it costs no Energy and doesn't end your turn.
 - **Camera:** drag to rotate, drag up or down to tilt, and pinch to zoom.
@@ -49,20 +49,20 @@ node test/cards.js 40             # every card and Gamebreaker on random boards
 node test/api.js 30               # random legal play through the public controller API
 ```
 
-Latest headless results with free movement (400 matches each on seeds 1000 and 99): 0 errors, 0 invariant violations, 0 stuck turns, 0 round-cap endings. Matches average 18 rounds (median 19).
+Latest headless results with free movement, walking budget = SPD uncapped (400 matches each on seeds 11 and 1000): 0 errors, 0 invariant violations, 0 stuck turns, 0 round-cap endings. Matches average 18 rounds (median 19).
 
-| Class | Win % (seed 1000) | Win % (seed 99) |
+| Class | Win % (seed 11) | Win % (seed 1000) |
 |---|---|---|
-| Vanguard | 23.5 | 20.5 |
-| Striker | 16.5 | 16.0 |
-| Marksman | 11.5 | 12.0 |
-| Phantom | 16.8 | 17.8 |
-| Lifebinder | 16.3 | 21.0 |
-| Hexer | 15.5 | 12.8 |
+| Vanguard | 20.3 | 24.3 |
+| Striker | 11.7 | 16.0 |
+| Marksman | 15.7 | 15.0 |
+| Phantom | 22.7 | 17.3 |
+| Lifebinder | 17.0 | 14.0 |
+| Hexer | 12.7 | 13.3 |
 
 ## Design decisions
 
-- **Free movement (changed after v1.0).** There is no Move/Act stance. Each turn you get a walking budget equal to your effective SPD, capped at 4 tiles. You can walk before, between or after playing cards, in as many separate walks as you like, until the budget runs out. A flat step costs 1 and a step up 1 level costs 2. Walking never draws a card or ends your turn, and a root sets the budget to 0. Movement cards are extra movement on top of the budget.
+- **Free movement (changed after v1.0).** There is no Move/Act stance. Each turn you get a walking budget equal to your effective SPD (no cap). You can walk before, between or after playing cards, in as many separate walks as you like, until the budget runs out. A flat step costs 1 and a step up 1 level costs 2. Walking never draws a card or ends your turn, and a root sets the budget to 0. Movement cards are extra movement on top of the budget.
 - **Flow** ("moved this turn") is now easy to get, so the Striker passive is back to the brief's +2. The Phantom passive now needs 3+ tiles moved during your last turn.
 - **Sudden death (not in the brief).** Three rounds after the last ring closes (round 19), every tile corrupts, the centre included. Corruption damage then rises by +3 every round. During sudden death, healing is halved, Cleanse and Sanctuary are disabled, and the Hexer's corruption protections stop working. Without this, cleansed tiles became permanent safe zones and endgames stalled.
 - **Shields reset to 0 at the start of their owner's turn.** The Vanguard passive then raises the shield to DEF. Stacking shields caused unkillable stalemates.
@@ -80,7 +80,7 @@ Full detail is in `test/SYSTEMS_NOTES.md`, `test/GRAPHICS_NOTES.md` and `test/UI
 
 | Card / rule | Brief | Final |
 |---|---|---|
-| Walking budget | 2 tiles (Move stance) | SPD tiles, max 4, any time in the turn |
+| Walking budget | 2 tiles (Move stance) | SPD tiles, any time in the turn |
 | Phantom passive | moved last turn | moved 3+ tiles last turn |
 | Striker passive | +2 | +2 (was +3 in v1.0) |
 | Flurry | 2× (1+ATK) | 2× (2+ATK) |
@@ -109,4 +109,4 @@ Full detail is in `test/SYSTEMS_NOTES.md`, `test/GRAPHICS_NOTES.md` and `test/UI
 | Thorn Bloom shield | 2+HPpts | 1+HPpts |
 | Siphon Field drain | 2+HPpts | 2+HPpts/2 |
 
-With the brief's numbers unchanged, Striker won 3.3% of matches and Lifebinder 30%. Switching to free movement with the v1.0 numbers gave Vanguard 28.3%, Phantom 21.3% and Hexer 9.2%. That led to the walking cap, the new Phantom condition and the movement and ranged-card changes marked above. Full detail and win rates are in `test/SYSTEMS_NOTES.md`.
+With the brief's numbers unchanged, Striker won 3.3% of matches and Lifebinder 30%. Switching to free movement with the v1.0 numbers gave Vanguard 28.3%, Phantom 21.3% and Hexer 9.2%. That led to the new Phantom condition and the movement and ranged-card changes marked above. Full detail and win rates are in `test/SYSTEMS_NOTES.md`.

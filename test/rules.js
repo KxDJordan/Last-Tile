@@ -224,8 +224,8 @@ function arena(opts = {}) {
       log.canStill = g.canPlay(s, s.hand[0].uid).ok;
     });
     eq(log.max, [4, 4], 'moveMax and moveLeft equal effective SPD (1 + 3 points)');
-    { const gq = arena({ points: [{ hp: 0, atk: 4, def: 0, spd: 6 }] }); eq(gq.moveAllowance(gq.players[0]), CORE.MOVE_CAP, 'walking budget capped at MOVE_CAP (SPD 7 -> 4)');
-      gq.players[0].shards.spd = -2; eq(gq.moveAllowance(gq.players[0]), 4, 'SPD 5 -> 4 (cap)'); gq.players[0].shards.spd = -4; eq(gq.moveAllowance(gq.players[0]), 3, 'SPD 3 -> 3'); }
+    { const gq = arena({ points: [{ hp: 0, atk: 4, def: 0, spd: 6 }] }); eq(gq.moveAllowance(gq.players[0]), 7, "walking budget equals SPD (SPD 7 -> 7)");
+      gq.players[0].shards.spd = -2; eq(gq.moveAllowance(gq.players[0]), 5, "SPD 5 -> 5"); gq.players[0].shards.spd = -4; eq(gq.moveAllowance(gq.players[0]), 3, 'SPD 3 -> 3'); }
     eq(log.reach, 4, 'walk targets reach exactly SPD tiles on flat ground');
     eq([log.upCost, log.flatCost], [2, 2], 'walkCost: stepping up 1 level costs 2');
     eq(log.tooFar, false, 'doMove refuses a tile beyond moveLeft');

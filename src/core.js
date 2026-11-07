@@ -2,7 +2,7 @@
 var CORE = (function () {
   'use strict';
   var f = Math.floor;
-  var MOVE_CAP = 4, PHANTOM_TILES = 3, STRIKER_BONUS = 2, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
+  var MOVE_CAP = 99, PHANTOM_TILES = 3, STRIKER_BONUS = 2, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
   var SIZE = 12, HAND_MAX = 7, DRAW_TO = 5, RING_FIRST = 4, RING_EVERY = 3, RINGS_TOTAL = 5;
   var VIEW_STATUSES = { root: 1, sap: 1, curse: 1, renew: 1, veil: 1, tether: 1, undying: 1, finalform: 1, bastion: 1, perch: 1, vanish: 1, rotembrace: 1, aim: 1 };
   var P = DATA.patterns;

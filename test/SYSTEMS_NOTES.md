@@ -23,7 +23,7 @@ Every script exits with a non-zero code on any error or invariant violation.
 ## Free movement (rule change after v1.0)
 
 There is no longer a Move/Act stance. Each turn a player may walk and play cards in any order:
-- At refill time CORE sets `p.moveMax = min(MOVE_CAP, effective SPD)`, where effective SPD is `game.stats(p).spd` (shards, Final Form and the rest included) and `MOVE_CAP` is 4. It also sets `p.moveLeft = p.moveMax`, or 0 if rooted.
+- At refill time CORE sets `p.moveMax = effective SPD`, where effective SPD is `game.stats(p).spd` (shards, Final Form and the rest included) (`MOVE_CAP` is 99, i.e. no cap, per the design owner). It also sets `p.moveLeft = p.moveMax`, or 0 if rooted.
 - Walking can happen before, between or after card plays, in any number of separate walks, until `moveLeft` runs out. A flat step costs 1 and a step up 1 level costs 2. Steps up 2+ levels are impossible, and pillars, pieces and a perched tile block, as before. Walking never draws a card and never ends the turn; only `takeTurn` resolving ends it.
 - Picking up a root (a Snare) mid-turn sets `moveLeft` to 0 immediately.
 - Movement cards are extra movement and don't use `moveLeft`.
@@ -85,7 +85,7 @@ Card and Gamebreaker numbers (the v1.0 pass and the free-movement pass marked "F
 | Siphon Field drain | 2 + HPpts | **2 + HPpts/2** | 30% per-seat win rate |
 
 Movement and SPD:
-- **Walking budget cap `MOVE_CAP = 4`** (`CORE.MOVE_CAP`). SPD still sets turn order and powers Phantom, Second Wind and Sprint, but a piece never walks more than 4 tiles per turn. With cap 5, high-SPD Phantoms dominated; uncapped SPD goes up to 7+ with shards.
+- **No walking cap.** The design owner wants movement to equal SPD, so `MOVE_CAP` is 99. A 4-tile cap was tried, but uncapped tested balanced too: 11.7–24.3% per class over 400 matches each on seeds 11 and 1000.
 - Flow cards (Backstab +2, Haymaker +3, Rising Kick push) keep their brief and v1.0 values. Flow now costs part of the walking budget rather than a whole turn, which is enough.
 
 Bot stat-spread weights (`DATA.BOT_WEIGHTS`, hp / atk / def / spd): vanguard 2 / 2.5 / 1.5 / 1.5; striker 4 / 3 / 2 / 1; marksman 4 / 3 / 2 / 2; phantom 3 / 0.5 / 1.5 / 3; lifebinder 2.5 / 2 / 1 / 1.5; hexer 2.5 / 3 / 1 / 2. Classes that need to kite got more SPD; the tanks got less HP.
@@ -162,7 +162,7 @@ CORE
 - Extra game state: `seed`, `surges` (sudden-death count), `nextSurgeIn` (rounds until the centre falls or the next surge, once all rings are closed, else null), `endedByCap`, `errors` (controller and card exceptions are caught here so a match never hangs), `decoys`, `spawns`, `turnCount`.
 - Tile extras: `perchLock` (null or ownerId), `cache = {id}`, `trap = {ownerId, kind:'snare'|'caltrops', dmg, root}`.
 - Player extras: `moveMax`, `moveLeft`, `points`, `shards`, `turnFlags` (`thousandCuts`, `blitz`, `riftwalk`, `strikerUsed`), `turnDone`, `movedLastTurn`, `tilesMovedThisTurn`, `tilesMovedLastTurn`, `loadout`. `stance` is always null.
-- Movement API: `walkTargets(p)` lists the tiles reachable within `p.moveLeft` (`[]` when it isn't p's turn, the turn is over, p is rooted or `moveLeft` is 0). `await doMove(p, {x,y})` walks the cheapest path, subtracts its cost from `moveLeft`, triggers traps and caches, sets Flow, calls `refresh` and resolves `true`; it resolves `false` with no side effects if the tile is out of reach. `walkCost(p, {x,y})` is the cost of the cheapest walking path ignoring the remaining budget (0 for p's own tile, `null` if unreachable), for UI previews. `moveAllowance(p)` returns `min(MOVE_CAP, SPD)`.
+- Movement API: `walkTargets(p)` lists the tiles reachable within `p.moveLeft` (`[]` when it isn't p's turn, the turn is over, p is rooted or `moveLeft` is 0). `await doMove(p, {x,y})` walks the cheapest path, subtracts its cost from `moveLeft`, triggers traps and caches, sets Flow, calls `refresh` and resolves `true`; it resolves `false` with no side effects if the tile is out of reach. `walkCost(p, {x,y})` is the cost of the cheapest walking path ignoring the remaining budget (0 for p's own tile, `null` if unreachable), for UI previews. `moveAllowance(p)` returns the effective SPD.
 - `canPlay` and `canUseGb` no longer give "You moved this turn"; after the turn ends the reason is "Turn is over".
 - Statuses not in the view list live in `p.statuses` with no `view.status` call: `vanishdmg`, `siphon`, `skyfall` (holds `tiles`).
 - Read helpers: `pieceAt(x,y)`, `isEmpty`, `isEnemy(u,e)`, `canAffect(u,e)`, `ownerOf(e)`, `hpOf(e)`, `hasStatus(p,type)`, `alivePlayers()`, `corruptionDamage(p)`, `rangeBonus(u,t)`, `los(a,b)`, `reachable(p,budget,{climbFree})`, `dashTargets`, `results()`, `ringTiles(k)`.

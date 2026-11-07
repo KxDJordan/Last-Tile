@@ -1174,8 +1174,8 @@ var DATA = (function () {
 
   // ---- Marksman
   dmgCard('long_shot', { name: 'Long Shot', cls: 'marksman', cost: 2, targets: T.ranged(6), style: 'projectile',
-    amt: function (g, u, e, p, s) { return 4 + s.atk; },
-    text: function (s) { return 'Deal ' + (4 + s.atk) + ' to a tile within 6.'; }, key: function (s) { return '' + (4 + s.atk); } });
+    amt: function (g, u, e, p, s) { return 5 + s.atk; },
+    text: function (s) { return 'Deal ' + (5 + s.atk) + ' to a tile within 6.'; }, key: function (s) { return '' + (5 + s.atk); } });
   dmgCard('piercing_bolt', { name: 'Piercing Bolt', cls: 'marksman', cost: 3, targets: T.dirs, style: 'beam',
     area: function (g, u, p) { return p.length ? P.line(g, u, dirOf(u, p[0]), 6 + g.rangeBonus(u, null)) : []; },
     amt: function (g, u, e, p, s) { return 3 + s.atk; },
@@ -1184,8 +1184,8 @@ var DATA = (function () {
     area: function (g, u, p) { return p.length ? P.cone(g, u, dirOf(u, p[0])) : []; },
     amt: function (g, u, e, p, s) { return 3 + s.atk; },
     text: function (s) { return 'Deal ' + (3 + s.atk) + ' in a cone.'; }, key: function (s) { return '' + (3 + s.atk); } });
-  walkCard('climb', { name: 'Climb', cls: 'marksman', cost: 1, text: function () { return 'Walk up to 2 tiles; climbing costs no extra movement.'; }, key: function () { return '2'; } }, function () { return 2; }, true);
-  tpCard('grapple', { name: 'Grapple', cls: 'marksman', cost: 2, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
+  walkCard('climb', { name: 'Climb', cls: 'marksman', cost: 1, text: function () { return 'Walk up to 3 tiles; climbing costs no extra movement.'; }, key: function () { return '3'; } }, function () { return 3; }, true);
+  tpCard('grapple', { name: 'Grapple', cls: 'marksman', cost: 1, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
   card('snare', { name: 'Snare', cls: 'marksman', cat: 'utility', cost: 1, targets: T.trapWithin(3),
     trapDmg: function (s) { return 2 + s.atk; },
     text: function (s) { return 'Place a trap within 3: deals ' + (2 + s.atk) + ' and roots (no walking or Movement cards next turn).'; }, key: function (s) { return '' + (2 + s.atk); },
@@ -1194,8 +1194,8 @@ var DATA = (function () {
     text: function (s) { return 'Your next Damage card deals +' + s.atk + '.'; }, key: function (s) { return '+' + s.atk; },
     apply: function (g, u) { return g.addStatus(u, 'aim', null, { amount: g.stats(u).atk }); }, ai: { kind: 'aim' } });
   healCard('field_dressing', { name: 'Field Dressing', cls: 'marksman', cost: 1,
-    text: function (s) { return 'Restore ' + (6 + s.hpPts) + ' HP.'; }, key: function (s) { return '+' + (6 + s.hpPts); } },
-  function (s) { return 6 + s.hpPts; });
+    text: function (s) { return 'Restore ' + (7 + s.hpPts) + ' HP.'; }, key: function (s) { return '+' + (7 + s.hpPts); } },
+  function (s) { return 7 + s.hpPts; });
 
   // ---- Phantom
   tpCard('phase_step', { name: 'Phase Step', cls: 'phantom', cost: 1, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
@@ -1311,7 +1311,7 @@ var DATA = (function () {
   function (s, g, u) { var b = 4 + s.atk + s.hpPts; return g && u && nearCorruption(g, u) ? b * 2 : b; });
 
   // ---- Temporary
-  walkCard('blitz_step', { name: 'Blitz Step', cls: 'temp', cost: 0, text: function () { return 'Walk up to 2 tiles. Vanishes at end of turn.'; }, key: function () { return '2'; } }, function () { return 2; });
+  walkCard('blitz_step', { name: 'Blitz Step', cls: 'temp', cost: 0, text: function () { return 'Walk up to 3 tiles. Vanishes at end of turn.'; }, key: function () { return '3'; } }, function () { return 3; });
 
   // ------------------------------------------------------------------ gamebreakers
   var GAMEBREAKERS = {};
@@ -1344,16 +1344,16 @@ var DATA = (function () {
       });
     } });
   gb('last_bastion', { cls: 'vanguard', name: 'Last Bastion', cost: 60,
-    text: function (s) { return 'Gain a shield of ' + (s.def * 2 + 3) + '. For 2 rounds, you can\'t be moved and you reflect half of the damage you take (pierce) to the attacker.'; },
-    apply: function (g, u) { return g.addShield(u, g.stats(u).def * 2 + 3).then(function () { return g.addStatus(u, 'bastion', 2); }); } });
+    text: function (s) { return 'Gain a shield of ' + (s.def + 3) + '. For 2 rounds, you can\'t be moved and you reflect half of the damage you take (pierce) to the attacker.'; },
+    apply: function (g, u) { return g.addShield(u, g.stats(u).def + 3).then(function () { return g.addStatus(u, 'bastion', 2); }); } });
   gb('earthshatter', { cls: 'vanguard', name: 'Earthshatter', cost: 100,
     area: function (g, u) { return P.around(g, u); },
-    text: function (s) { return 'Raise all tiles in a 3×3 around you by 1 (max 2). All pieces in the 8 tiles around you take ' + (2 + s.def * 2) + ' and are pushed 2.'; },
+    text: function (s) { return 'Raise all tiles in a 3×3 around you by 1 (max 2). All pieces in the 8 tiles around you take ' + (1 + s.def * 2) + ' and are pushed 2.'; },
     apply: function (g, u) {
       var s = g.stats(u);
       return g.raiseTiles(P.square(g, u, 1), 1, 2).then(function () {
         var tiles = P.around(g, u);
-        return g.strike(u, tiles, function () { return 2 + s.def * 2; }, { style: 'area', target: U(u), cardId: 'earthshatter', gb: true });
+        return g.strike(u, tiles, function () { return 1 + s.def * 2; }, { style: 'area', target: U(u), cardId: 'earthshatter', gb: true });
       }).then(function (hits) {
         var chain = Promise.resolve();
         (hits || []).forEach(function (h) { chain = chain.then(function () { if (h.entity.alive) return g.push(h.entity, dirOf(u, h.entity), 2, u); }); });
@@ -1364,7 +1364,7 @@ var DATA = (function () {
     text: function () { return 'Your Damage cards cost 0 Energy for the rest of this turn.'; },
     apply: function (g, u) { u.turnFlags.thousandCuts = true; return Promise.resolve(); } });
   gb('blitz_chain', { cls: 'striker', name: 'Blitz Chain', cost: 70,
-    text: function () { return 'For the rest of this turn, each Damage card that hits adds a temporary 0-cost Blitz Step (walk up to 2) to your hand.'; },
+    text: function () { return 'For the rest of this turn, each Damage card that hits adds a temporary 0-cost Blitz Step (walk up to 3) to your hand.'; },
     apply: function (g, u) { u.turnFlags.blitz = true; return Promise.resolve(); } });
   gb('final_form', { cls: 'striker', name: 'Final Form', cost: 100,
     text: function (s) { return 'For 2 rounds, gain +' + s.spd + ' ATK (equal to your SPD).'; },
@@ -1374,7 +1374,7 @@ var DATA = (function () {
     area: function (g, u, p) { return p.length ? railTiles(g, u, p[0]) : []; },
     text: function (s) { return 'Pick a direction. Deal ' + (6 + s.atk * 2) + ' pierce to every piece in that line across the entire board, ignoring pillars.'; },
     apply: function (g, u, p) { var s = g.stats(u); return g.strike(u, railTiles(g, u, p[0]), function () { return 6 + s.atk * 2; }, { style: 'beam', target: p[0], cardId: 'railpiercer', pierce: true, gb: true }); } });
-  gb('skyfall_volley', { cls: 'marksman', name: 'Skyfall Volley', cost: 100, pickCount: 1,
+  gb('skyfall_volley', { cls: 'marksman', name: 'Skyfall Volley', cost: 80, pickCount: 1,
     targets: function (g) { var r = []; for (var y = 0; y < g.size; y++) for (var x = 0; x < g.size; x++) r.push(xy(x, y)); return r; },
     area: function (g, u, p) { return p.length ? P.square(g, p[0], 1) : []; },
     text: function (s) { return 'Mark a 3×3 area anywhere. At the start of your next turn, deal ' + (8 + s.atk * 2) + ' to every piece inside. The marker is visible to all.'; },
@@ -1535,7 +1535,7 @@ var DATA = (function () {
 var CORE = (function () {
   'use strict';
   var f = Math.floor;
-  var MOVE_CAP = 5, PHANTOM_TILES = 3, STRIKER_BONUS = 2, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
+  var MOVE_CAP = 99, PHANTOM_TILES = 3, STRIKER_BONUS = 2, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
   var SIZE = 12, HAND_MAX = 7, DRAW_TO = 5, RING_FIRST = 4, RING_EVERY = 3, RINGS_TOTAL = 5;
   var VIEW_STATUSES = { root: 1, sap: 1, curse: 1, renew: 1, veil: 1, tether: 1, undying: 1, finalform: 1, bastion: 1, perch: 1, vanish: 1, rotembrace: 1, aim: 1 };
   var P = DATA.patterns;
@@ -2559,7 +2559,7 @@ var AI = (function () {
   var CLASS_AI = {
     vanguard: { ideal: 1, aggr: 1.0, heal: 1.0, shield: 1.3, elev: 0.2, retreat: 0.2 },
     striker: { ideal: 1, aggr: 1.15, heal: 1.0, shield: 0.9, elev: 0.0, retreat: 0.3, threat: 0.45 },
-    marksman: { ideal: 4, aggr: 1.0, heal: 1.1, shield: 1.0, elev: 1.0, retreat: 0.45, threat: 0.5 },
+    marksman: { ideal: 4, aggr: 1.0, heal: 1.1, shield: 1.0, elev: 1.0, retreat: 0.45, threat: 0.65 },
     phantom: { ideal: 2, aggr: 1.1, heal: 1.0, shield: 0.9, elev: 0.1, retreat: 0.35 },
     lifebinder: { ideal: 2, aggr: 0.95, heal: 1.3, shield: 1.0, elev: 0.2, retreat: 0.3 },
     hexer: { ideal: 3, aggr: 1.0, heal: 1.0, shield: 0.9, elev: 0.3, retreat: 0.35 }
@@ -2596,7 +2596,7 @@ var AI = (function () {
       enemies.push({ e: e, x: e.x, y: e.y, hp: o.hp, maxHp: o.maxHp, shield: o.shield, def: os.def, atk: os.atk, cls: o.cls,
         phantomHalf: o.cls === 'phantom' && o.tilesMovedLastTurn >= CORE.PHANTOM_TILES && o.phantomHitRound !== g.round, statuses: o.statuses, immovable: g.isImmovable(e) });
     });
-    enemies.forEach(function (en) { en.pen = Math.max(0, en.def - 1) * 0.6 + Math.min(en.shield, 10) * 0.08 + (en.hp / en.maxHp) * 1.0; });
+    enemies.forEach(function (en) { en.pen = Math.max(0, en.def - 1) * 0.35 + Math.min(en.shield, 10) * 0.08 + (en.hp / en.maxHp) * 1.0; });
     var hpFrac = me.hp / me.maxHp;
     var ideal = cw.ideal + (hpFrac < cw.retreat ? 2 : 0);
     var mod = { add: 0, mult: 1 };
@@ -2886,9 +2886,9 @@ var AI = (function () {
           var en = enemyAt(ctx, r.hit.x, r.hit.y); if (!en) return;
           consider([t], dmgValue(ctx, en, 3 + s.def + s.atk, 1, false) + displaceValue(ctx, en, simPush(g, en, r.d, 3), false));
         }); break;
-      case 'last_bastion': if (near4 && ctx.hpFrac < 0.8) consider([], (s.def * 2 + 3) * 0.8 + 3 * near4); break;
+      case 'last_bastion': if (near4 && ctx.hpFrac < 0.8) consider([], (s.def + 3) * 0.8 + 3 * near4); break;
       case 'earthshatter': {
-        var v = 0; P.around(g, me).forEach(function (t) { var en = enemyAt(ctx, t.x, t.y); if (en) v += dmgValue(ctx, en, 2 + s.def * 2, 1, false) + 2; });
+        var v = 0; P.around(g, me).forEach(function (t) { var en = enemyAt(ctx, t.x, t.y); if (en) v += dmgValue(ctx, en, 1 + s.def * 2, 1, false) + 2; });
         consider([], v); break;
       }
       case 'thousand_cuts': {
