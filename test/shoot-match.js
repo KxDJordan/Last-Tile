@@ -39,6 +39,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       await page.screenshot({ path: `${pre}-after.png` });
     }
   }
+  // Free walk: idle highlight -> tap preview -> confirm, turn continues
+  if (await page.evaluate(() => !!UI.debug.M.turn)) {
+    await page.screenshot({ path: `${pre}-walk-idle.png` });
+    const wt = await page.evaluate(() => { const g = UI.debug.M.game, me = g.players[g.humanId]; const ts = g.walkTargets(me); return ts.length ? { t: ts[ts.length - 1], left: me.moveLeft } : null; });
+    if (wt) {
+      await page.evaluate(t => UI.onTileTap({ tile: t, entity: null }), wt.t); await page.waitForTimeout(500);
+      await page.screenshot({ path: `${pre}-walk-preview.png` });
+      await page.click('#detail [data-d="confirm"]');
+      await page.waitForFunction(() => !UI.debug.M.busy, null, { timeout: 60000 }); await page.waitForTimeout(800);
+      await page.screenshot({ path: `${pre}-walk-after.png` });
+      console.log('walk', JSON.stringify(await page.evaluate(l => { const g = UI.debug.M.game, me = g.players[g.humanId]; return { before: l, left: me.moveLeft, turnStillMine: !!UI.debug.M.turn }; }, wt.left)));
+    }
+  }
   // GB inspect / select
   await page.click('#btn-gb'); await page.waitForTimeout(300);
   await page.screenshot({ path: `${pre}-gb.png` });

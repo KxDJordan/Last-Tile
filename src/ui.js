@@ -46,7 +46,7 @@ var UI = (function () {
     hp: { name: 'HP', desc: 'Max health. +5 per point', icon: '♥' },
     atk: { name: 'ATK', desc: 'Boosts most damage', icon: '⚔' },
     def: { name: 'DEF', desc: 'Reduces each hit taken', icon: '⛨' },
-    spd: { name: 'SPD', desc: 'Turn order and agility', icon: '➤' }
+    spd: { name: 'SPD', desc: 'Tiles walked per turn', icon: '➤' }
   };
   var CLASS_GLYPH = { vanguard: '⛨', striker: '✦', marksman: '➶', phantom: '☽', lifebinder: '❦', hexer: '☠' };
 
@@ -104,9 +104,9 @@ var UI = (function () {
   function lsSet(k, v) { try { window.localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
 
   function statInfo(k) {
-    var d = DATA.STAT_INFO && DATA.STAT_INFO[k];
+    var d = k === 'spd' ? null : DATA.STAT_INFO && DATA.STAT_INFO[k];  // SPD: short local text so it fits 2 lines
     var base = STAT_INFO[k];
-    return d ? { name: d.name || base.name, desc: String(d.desc || base.desc).replace(/\.$/, ''), icon: base.icon } : base;
+    return d ? { name: d.name || base.name, desc: String(d.desc || base.desc).split(';')[0].replace(/\.$/, ''), icon: base.icon } : base;
   }
   function defaultPoints() { return { hp: 4, atk: 2, def: 2, spd: 2 }; }
   function pointsUsed(p) { return STAT_KEYS.reduce(function (s, k) { return s + (p[k] | 0); }, 0); }
@@ -350,7 +350,7 @@ var UI = (function () {
           '<div class="pips">' + pips + '</div>' +
           '<button class="round-btn" data-stat="' + k + '" data-d="1" aria-label="Increase ' + info.name + '"' + (p >= 6 || left <= 0 ? ' disabled' : '') + '>+</button>' +
         '</div>' +
-        '<div class="stat-val"><small>' + info.name + '</small><b>' + vals[k] + '</b></div>' +
+        '<div class="stat-val"><small>' + (k === 'spd' ? 'Walk' : info.name) + '</small><b>' + vals[k] + '</b></div>' +
       '</div>';
     }).join('');
     $('#pane-stats').innerHTML = html;
@@ -698,7 +698,16 @@ var UI = (function () {
 
     var turn = !!M.turn && !M.abandoned;
     var walk = turn ? attempt(function () { return g.walkTargets(me); }, []) : [];
+    var mi = moveInfo(me);
+    var segs = '';
+    for (var j = 0; j < mi.max; j++) segs += '<i class="' + (j < mi.left ? 'on' : '') + '"></i>';
+    var mvHtml = '<span class="mv-segs">' + segs + '</span><span class="mv-label"><svg viewBox="0 0 24 24"><path d="M19 12l-5-5v3H5v4h9v3z"/></svg>' + mi.left + '/' + mi.max + '</span>';
+    var mEl = $('#movebar');
+    if (mEl._html !== mvHtml) { mEl.innerHTML = mvHtml; mEl._html = mvHtml; }
+    mEl.classList.toggle('empty', mi.left <= 0);
+    mEl.setAttribute('aria-label', 'Movement ' + mi.left + ' of ' + mi.max + ' tiles');
     var mv = $('#btn-move');
+    $('#btn-move-n').textContent = mi.left + '/' + mi.max;
     mv.disabled = !turn || M.busy || !walk.length;
     mv.classList.toggle('on', !!(M.sel && M.sel.kind === 'move'));
     $('#btn-end').disabled = !turn || M.busy;
@@ -706,6 +715,17 @@ var UI = (function () {
     $('#hud-bottom').classList.toggle('my-turn', turn);
     $('#hud-bottom').classList.toggle('busy', M.busy);
     $('#hud-bottom').classList.toggle('dead', !me.alive);
+  }
+
+  function moveInfo(me) {
+    var max = me.moveMax != null ? me.moveMax | 0 : attempt(function () { return M.game.stats(me).spd; }, 0);
+    var left = me.moveLeft != null ? me.moveLeft | 0 : max;
+    return { left: Math.max(0, left), max: Math.max(0, max) };
+  }
+  function walkCost(me, t) {
+    var g = M.game;
+    if (typeof g.walkCost === 'function') { var c = attempt(function () { return g.walkCost(me, t); }, null); if (c != null) return c; }
+    return Math.abs(t.x - me.x) + Math.abs(t.y - me.y);
   }
 
   function anyPlayable() {
@@ -739,15 +759,19 @@ var UI = (function () {
       cat = 'Gamebreaker'; cost = '⚡︎' + (g ? g.cost : '');
       text = g ? attempt(function () { return g.text(st); }, '') : '';
     } else {
-      title = 'Move'; color = '#38d6ff'; cat = 'Stance'; cost = '';
-      text = 'Walk up to 2 tiles, then draw 1 card. Ends your turn.';
+      var mi2 = moveInfo(me);
+      title = 'Walk'; color = '#38d6ff'; cat = 'Movement \u00B7 ' + mi2.left + '/' + mi2.max + ' left'; cost = '';
+      if (s.pending) {
+        var wc = walkCost(me, s.pending);
+        text = 'Walk here for ' + wc + ' movement. ' + Math.max(0, mi2.left - wc) + ' left after. Free: no Energy, and you can still play cards.';
+      } else text = 'Walk up to ' + mi2.left + ' tiles (stepping up a level costs 2). Free: no Energy, and you can still play cards.';
     }
     if (M.sel) {
       if (s.blocked) reason = s.blocked;
       else if (s.pickCount === 0) { status = 'Self-targeted. Confirm to play'; canConfirm = true; }
       else if (!s.targets || !s.targets.length) reason = 'No valid targets';
-      else if (s.pending) { status = 'Tap the tile again or Confirm'; canConfirm = true; }
-      else status = s.pickCount > 1 ? 'Pick tile ' + (s.picks.length + 1) + ' of ' + s.pickCount : (s.kind === 'move' ? 'Tap a highlighted tile' : 'Tap a highlighted tile to aim');
+      else if (s.pending) { status = s.kind === 'move' ? 'Tap again or Confirm to walk' : 'Tap the tile again or Confirm'; canConfirm = true; }
+      else status = s.pickCount > 1 ? 'Pick tile ' + (s.picks.length + 1) + ' of ' + s.pickCount : (s.kind === 'move' ? 'Tap a highlighted tile to walk' : 'Tap a highlighted tile to aim');
     } else {
       status = M.inspect.note || (M.turn ? '' : 'Not your turn');
     }
@@ -827,7 +851,7 @@ var UI = (function () {
     var me = human();
     if (myTurn() && me) {
       var walk = attempt(function () { return M.game.walkTargets(me); }, []);
-      if (walk.length) { vcall('highlight', { targets: walk, area: [], color: '#9fe8ff' }); return; }
+      if (walk.length && moveInfo(me).left > 0) { vcall('highlight', { targets: walk, area: [], color: '#9fe8ff' }); return; }
     }
     vcall('clearHighlight');
   }
@@ -888,11 +912,10 @@ var UI = (function () {
     var walk = attempt(function () { return g.walkTargets(me); }, []);
     beginSel({
       kind: 'move', picks: [], pending: pendingTile || null, pickCount: 1, color: '#38d6ff',
-      blocked: walk.length ? '' : (me.stance === 'act' ? 'Already acted this turn' : 'Cannot move'),
+      blocked: walk.length ? '' : (moveInfo(me).left <= 0 ? 'No movement left this turn' : 'Nowhere to walk'),
       targetsFn: function () { return walk; },
       areaFn: function (picks) { return picks.slice(-1); },
-      exec: function (picks) { return g.doMove(me, picks[0]); },
-      endsTurn: true
+      exec: function (picks) { return g.doMove(me, picks[0]); }
     });
   }
 
@@ -971,7 +994,7 @@ var UI = (function () {
       M.busy = false;
       if (res === false) toast('That move isn\u2019t allowed', 'bad');
       if (!M.turn) { renderHud(); return; }
-      if ((s.endsTurn && res !== false) || !me.alive || M.game.over) { finishTurn(); return; }
+      if (!me.alive || M.game.over) { finishTurn(); return; }
       idleHighlight();
       renderHud();
     });

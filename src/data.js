@@ -21,7 +21,7 @@ var DATA = (function () {
     hp: { name: 'HP', desc: 'Max health. +5 per point.' },
     atk: { name: 'ATK', desc: 'Raises most damage.' },
     def: { name: 'DEF', desc: 'Reduces each hit taken.' },
-    spd: { name: 'SPD', desc: 'Acts earlier; powers Phantom cards.' }
+    spd: { name: 'SPD', desc: 'Tiles you can walk each turn; acts earlier.' }
   };
   var POINTS_TOTAL = 10, POINTS_MAX = 6, DECK_SIZE = 16;
 
@@ -38,7 +38,7 @@ var DATA = (function () {
     },
     striker: {
       id: 'striker', name: 'Striker', role: 'Mobile brawler that hits hardest on the move', color: '#ff7a2e', color2: '#ffd2a8',
-      passiveName: 'Momentum', passiveText: 'Your first Damage card each turn deals +3 if you moved this turn.',
+      passiveName: 'Momentum', passiveText: 'Your first Damage card each turn deals +2 if you moved this turn.',
       starterDupes: ['rising_kick', 'flurry'], idealRange: 1,
       variants: [
         { id: 'brawler', name: 'Brawler', desc: 'Oversized glowing gauntlets and a headband.' },
@@ -58,7 +58,7 @@ var DATA = (function () {
     },
     phantom: {
       id: 'phantom', name: 'Phantom', role: 'Elusive assassin that strikes and vanishes', color: '#8a5cc7', color2: '#d9c6ff',
-      passiveName: 'Elusive', passiveText: "The first time you're hit each round, take half damage if you moved during your last turn.",
+      passiveName: 'Elusive', passiveText: "The first time you're hit each round, take half damage if you moved 3+ tiles during your last turn.",
       starterDupes: ['backstab', 'flicker_strike'], idealRange: 2,
       variants: [
         { id: 'shade', name: 'Shade', desc: 'Flowing cloak over a semi-transparent body.' },
@@ -366,8 +366,8 @@ var DATA = (function () {
 
   // ---- Marksman
   dmgCard('long_shot', { name: 'Long Shot', cls: 'marksman', cost: 2, targets: T.ranged(6), style: 'projectile',
-    amt: function (g, u, e, p, s) { return 4 + s.atk; },
-    text: function (s) { return 'Deal ' + (4 + s.atk) + ' to a tile within 6.'; }, key: function (s) { return '' + (4 + s.atk); } });
+    amt: function (g, u, e, p, s) { return 5 + s.atk; },
+    text: function (s) { return 'Deal ' + (5 + s.atk) + ' to a tile within 6.'; }, key: function (s) { return '' + (5 + s.atk); } });
   dmgCard('piercing_bolt', { name: 'Piercing Bolt', cls: 'marksman', cost: 3, targets: T.dirs, style: 'beam',
     area: function (g, u, p) { return p.length ? P.line(g, u, dirOf(u, p[0]), 6 + g.rangeBonus(u, null)) : []; },
     amt: function (g, u, e, p, s) { return 3 + s.atk; },
@@ -376,8 +376,8 @@ var DATA = (function () {
     area: function (g, u, p) { return p.length ? P.cone(g, u, dirOf(u, p[0])) : []; },
     amt: function (g, u, e, p, s) { return 3 + s.atk; },
     text: function (s) { return 'Deal ' + (3 + s.atk) + ' in a cone.'; }, key: function (s) { return '' + (3 + s.atk); } });
-  walkCard('climb', { name: 'Climb', cls: 'marksman', cost: 1, text: function () { return 'Walk up to 2 tiles; climbing costs no extra movement.'; }, key: function () { return '2'; } }, function () { return 2; }, true);
-  tpCard('grapple', { name: 'Grapple', cls: 'marksman', cost: 2, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
+  walkCard('climb', { name: 'Climb', cls: 'marksman', cost: 1, text: function () { return 'Walk up to 3 tiles; climbing costs no extra movement.'; }, key: function () { return '3'; } }, function () { return 3; }, true);
+  tpCard('grapple', { name: 'Grapple', cls: 'marksman', cost: 1, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
   card('snare', { name: 'Snare', cls: 'marksman', cat: 'utility', cost: 1, targets: T.trapWithin(3),
     trapDmg: function (s) { return 2 + s.atk; },
     text: function (s) { return 'Place a trap within 3: deals ' + (2 + s.atk) + ' and roots (no walking or Movement cards next turn).'; }, key: function (s) { return '' + (2 + s.atk); },
@@ -386,8 +386,8 @@ var DATA = (function () {
     text: function (s) { return 'Your next Damage card deals +' + s.atk + '.'; }, key: function (s) { return '+' + s.atk; },
     apply: function (g, u) { return g.addStatus(u, 'aim', null, { amount: g.stats(u).atk }); }, ai: { kind: 'aim' } });
   healCard('field_dressing', { name: 'Field Dressing', cls: 'marksman', cost: 1,
-    text: function (s) { return 'Restore ' + (6 + s.hpPts) + ' HP.'; }, key: function (s) { return '+' + (6 + s.hpPts); } },
-  function (s) { return 6 + s.hpPts; });
+    text: function (s) { return 'Restore ' + (7 + s.hpPts) + ' HP.'; }, key: function (s) { return '+' + (7 + s.hpPts); } },
+  function (s) { return 7 + s.hpPts; });
 
   // ---- Phantom
   tpCard('phase_step', { name: 'Phase Step', cls: 'phantom', cost: 1, text: function () { return 'Teleport to an empty tile within 3.'; }, key: function () { return '3'; } }, 3);
@@ -473,7 +473,7 @@ var DATA = (function () {
     apply: function (g, u) { return g.cleanseTiles([U(u)].concat(P.adjacent(g, u))); }, ai: { kind: 'cleanse' } });
 
   // ---- Hexer
-  dmgCard('rot_lash', { name: 'Rot Lash', cls: 'hexer', cost: 3, targets: T.dirs, area: A.line(4), style: 'beam',
+  dmgCard('rot_lash', { name: 'Rot Lash', cls: 'hexer', cost: 2, targets: T.dirs, area: A.line(4), style: 'beam',
     amt: function (g, u, e, p, s) { return 2 + s.atk + (nearCorruption(g, e) ? 3 : 0); },
     text: function (s) { return 'Deal ' + (2 + s.atk) + ' to a line of 4. +3 to targets on or next to corruption.'; }, key: function (s) { return '' + (2 + s.atk); } });
   card('blight_seed', { name: 'Blight Seed', cls: 'hexer', cat: 'utility', cost: 1,
@@ -484,8 +484,8 @@ var DATA = (function () {
   walkCard('riftwalker', { name: 'Riftwalker', cls: 'hexer', cost: 2, text: function () { return 'Walk up to 3 tiles. Ignore corruption damage this turn.'; }, key: function () { return '3'; }, ai: { kind: 'move', rift: true } },
     function () { return 3; }, false, function (g, u) { u.turnFlags.riftwalk = true; return Promise.resolve(); });
   dmgCard('hex_bolt', { name: 'Hex Bolt', cls: 'hexer', cost: 2, targets: T.ranged(5), style: 'projectile',
-    amt: function (g, u, e, p, s) { return 2 + s.atk + (onCorruption(g, e) ? 3 : 0); },
-    text: function (s) { return 'Deal ' + (2 + s.atk) + ' to a tile within 5. +3 if the target is on corruption.'; }, key: function (s) { return '' + (2 + s.atk); } });
+    amt: function (g, u, e, p, s) { return 3 + s.atk + (onCorruption(g, e) ? 3 : 0); },
+    text: function (s) { return 'Deal ' + (3 + s.atk) + ' to a tile within 5. +3 if the target is on corruption.'; }, key: function (s) { return '' + (3 + s.atk); } });
   card('grasping_rot', { name: 'Grasping Rot', cls: 'hexer', cat: 'movement', cost: 2, targets: T.enemy(3),
     text: function () { return 'Push an enemy within 3 two tiles away from you.'; }, key: function () { return '2'; },
     apply: function (g, u, p) { var e = g.pieceAt(p[0].x, p[0].y); return g.attackFx(u, { style: 'projectile', target: p[0], tiles: [p[0]] }, 'grasping_rot').then(function () { return e ? g.push(e, dirOf(u, e), 2, u) : null; }); },
@@ -503,7 +503,7 @@ var DATA = (function () {
   function (s, g, u) { var b = 4 + s.atk + s.hpPts; return g && u && nearCorruption(g, u) ? b * 2 : b; });
 
   // ---- Temporary
-  walkCard('blitz_step', { name: 'Blitz Step', cls: 'temp', cost: 0, text: function () { return 'Walk up to 2 tiles. Vanishes at end of turn.'; }, key: function () { return '2'; } }, function () { return 2; });
+  walkCard('blitz_step', { name: 'Blitz Step', cls: 'temp', cost: 0, text: function () { return 'Walk up to 3 tiles. Vanishes at end of turn.'; }, key: function () { return '3'; } }, function () { return 3; });
 
   // ------------------------------------------------------------------ gamebreakers
   var GAMEBREAKERS = {};
@@ -536,16 +536,16 @@ var DATA = (function () {
       });
     } });
   gb('last_bastion', { cls: 'vanguard', name: 'Last Bastion', cost: 60,
-    text: function (s) { return 'Gain a shield of ' + (s.def * 2 + 3) + '. For 2 rounds, you can\'t be moved and you reflect half of the damage you take (pierce) to the attacker.'; },
-    apply: function (g, u) { return g.addShield(u, g.stats(u).def * 2 + 3).then(function () { return g.addStatus(u, 'bastion', 2); }); } });
+    text: function (s) { return 'Gain a shield of ' + (s.def + 3) + '. For 2 rounds, you can\'t be moved and you reflect half of the damage you take (pierce) to the attacker.'; },
+    apply: function (g, u) { return g.addShield(u, g.stats(u).def + 3).then(function () { return g.addStatus(u, 'bastion', 2); }); } });
   gb('earthshatter', { cls: 'vanguard', name: 'Earthshatter', cost: 100,
     area: function (g, u) { return P.around(g, u); },
-    text: function (s) { return 'Raise all tiles in a 3×3 around you by 1 (max 2). All pieces in the 8 tiles around you take ' + (2 + s.def * 2) + ' and are pushed 2.'; },
+    text: function (s) { return 'Raise all tiles in a 3×3 around you by 1 (max 2). All pieces in the 8 tiles around you take ' + (1 + s.def * 2) + ' and are pushed 2.'; },
     apply: function (g, u) {
       var s = g.stats(u);
       return g.raiseTiles(P.square(g, u, 1), 1, 2).then(function () {
         var tiles = P.around(g, u);
-        return g.strike(u, tiles, function () { return 2 + s.def * 2; }, { style: 'area', target: U(u), cardId: 'earthshatter', gb: true });
+        return g.strike(u, tiles, function () { return 1 + s.def * 2; }, { style: 'area', target: U(u), cardId: 'earthshatter', gb: true });
       }).then(function (hits) {
         var chain = Promise.resolve();
         (hits || []).forEach(function (h) { chain = chain.then(function () { if (h.entity.alive) return g.push(h.entity, dirOf(u, h.entity), 2, u); }); });
@@ -556,7 +556,7 @@ var DATA = (function () {
     text: function () { return 'Your Damage cards cost 0 Energy for the rest of this turn.'; },
     apply: function (g, u) { u.turnFlags.thousandCuts = true; return Promise.resolve(); } });
   gb('blitz_chain', { cls: 'striker', name: 'Blitz Chain', cost: 70,
-    text: function () { return 'For the rest of this turn, each Damage card that hits adds a temporary 0-cost Blitz Step (walk up to 2) to your hand.'; },
+    text: function () { return 'For the rest of this turn, each Damage card that hits adds a temporary 0-cost Blitz Step (walk up to 3) to your hand.'; },
     apply: function (g, u) { u.turnFlags.blitz = true; return Promise.resolve(); } });
   gb('final_form', { cls: 'striker', name: 'Final Form', cost: 100,
     text: function (s) { return 'For 2 rounds, gain +' + s.spd + ' ATK (equal to your SPD).'; },
@@ -566,7 +566,7 @@ var DATA = (function () {
     area: function (g, u, p) { return p.length ? railTiles(g, u, p[0]) : []; },
     text: function (s) { return 'Pick a direction. Deal ' + (6 + s.atk * 2) + ' pierce to every piece in that line across the entire board, ignoring pillars.'; },
     apply: function (g, u, p) { var s = g.stats(u); return g.strike(u, railTiles(g, u, p[0]), function () { return 6 + s.atk * 2; }, { style: 'beam', target: p[0], cardId: 'railpiercer', pierce: true, gb: true }); } });
-  gb('skyfall_volley', { cls: 'marksman', name: 'Skyfall Volley', cost: 100, pickCount: 1,
+  gb('skyfall_volley', { cls: 'marksman', name: 'Skyfall Volley', cost: 80, pickCount: 1,
     targets: function (g) { var r = []; for (var y = 0; y < g.size; y++) for (var x = 0; x < g.size; x++) r.push(xy(x, y)); return r; },
     area: function (g, u, p) { return p.length ? P.square(g, p[0], 1) : []; },
     text: function (s) { return 'Mark a 3×3 area anywhere. At the start of your next turn, deal ' + (8 + s.atk * 2) + ' to every piece inside. The marker is visible to all.'; },
@@ -677,12 +677,12 @@ var DATA = (function () {
 
   // Weighted stat spreads so bots build sensibly for their class.
   var BOT_WEIGHTS = {
-    vanguard: { hp: 2.5, atk: 2.5, def: 1.5, spd: 1 },
+    vanguard: { hp: 2, atk: 2.5, def: 1.5, spd: 1.5 },
     striker: { hp: 4, atk: 3, def: 2, spd: 1 },
-    marksman: { hp: 4, atk: 3, def: 2, spd: 1 },
+    marksman: { hp: 4, atk: 3, def: 2, spd: 2 },
     phantom: { hp: 3, atk: 0.5, def: 1.5, spd: 3 },
-    lifebinder: { hp: 3, atk: 2, def: 1, spd: 1 },
-    hexer: { hp: 2.5, atk: 3, def: 1, spd: 1.5 }
+    lifebinder: { hp: 2.5, atk: 2, def: 1, spd: 1.5 },
+    hexer: { hp: 2.5, atk: 3, def: 1, spd: 2 }
   };
   function randomLoadout(rng, cls) {
     rng = rng || Math.random;

@@ -58,6 +58,7 @@ function invariants(game, where) {
   game.players.forEach(p => {
     if (p.hp > p.maxHp) bad.push(`${p.name} hp ${p.hp} > maxHp ${p.maxHp}`);
     if (p.energy < 0) bad.push(`${p.name} energy ${p.energy}`);
+    if (p.moveLeft < 0 || p.moveLeft > p.moveMax) bad.push(`${p.name} moveLeft ${p.moveLeft}/${p.moveMax}`);
     if (p.shield < 0) bad.push(`${p.name} shield ${p.shield}`);
     if (p.meter < 0 || p.meter > 100) bad.push(`${p.name} meter ${p.meter}`);
     if (p.hand.length > 7) bad.push(`${p.name} hand ${p.hand.length}`);

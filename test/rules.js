@@ -173,9 +173,11 @@ function arena(opts = {}) {
   {
     // phantom passive halves first hit each round if it moved last turn
     const g = arena({ cls: ['phantom', 'striker'] });
-    const ph = g.players[0]; ph.movedLastTurn = true; g.round = 3;
+    const ph = g.players[0]; ph.tilesMovedLastTurn = 3; g.round = 3;
     let h = ph.hp; await g.damage(ph, 10, { source: 'card', attacker: g.players[1] }); eq(h - ph.hp, 5, 'Phantom first hit halved');
     h = ph.hp; await g.damage(ph, 10, { source: 'card', attacker: g.players[1] }); eq(h - ph.hp, 10, 'Phantom second hit full');
+    g.round = 4; ph.tilesMovedLastTurn = 2;
+    h = ph.hp; await g.damage(ph, 10, { source: 'card', attacker: g.players[1] }); eq(h - ph.hp, 10, 'Phantom passive needs 3+ tiles moved last turn');
   }
   {
     // traps: owner does not trigger, enemy does
@@ -194,11 +196,75 @@ function arena(opts = {}) {
     g.active = s; s.energy = 3; s.turnFlags = {}; s.movedThisTurn = true; s.stance = null; s.turnDone = false;
     s.hand = [{ uid: 1, id: 'jab' }, { uid: 2, id: 'jab' }];
     let h = t.hp; await g.playCard(s, 1, [{ x: 6, y: 5 }]);
-    eq(h - t.hp, 2 + 4 + 3, 'Striker: first Damage card after moving deals +3');
+    eq(h - t.hp, 2 + 4 + 2, 'Striker: first Damage card after moving deals +2');
     h = t.hp; await g.playCard(s, 2, [{ x: 6, y: 5 }]);
     eq(h - t.hp, 6, 'Striker bonus only on the first Damage card');
-    eq([s.energy, s.stance, s.discard.length], [1, 'act', 2], 'energy spent, stance act, cards discarded');
-    eq(g.walkTargets(s).length, 0, 'no Move stance after acting');
+    eq([s.energy, s.discard.length], [1, 2], 'energy spent, cards discarded');
+  }
+  // --- free movement: walk budget = SPD, combine with cards, split walks, root
+  {
+    const inTurn = async (g, p, fn) => { g.controllers = g.players.map(() => ({ takeTurn: () => Promise.resolve() })); g.controllers[p.id] = { takeTurn: fn }; await g._turn(p); };
+    const g = arena({ cls: ['striker', 'vanguard'], pos: [[2, 5], [9, 5]], points: [{ hp: 4, atk: 3, def: 0, spd: 3 }, { hp: 4, atk: 0, def: 0, spd: 3 }] });
+    const s = g.players[0], t = g.players[1];
+    s.deck = [{ uid: 501, id: 'jab' }, { uid: 502, id: 'jab' }, { uid: 503, id: 'bandage' }, { uid: 504, id: 'brace' }, { uid: 505, id: 'flare' }];
+    let log = {};
+    await inTurn(g, s, async () => {
+      log.max = [s.moveMax, s.moveLeft];
+      log.reach = Math.max(...g.walkTargets(s).map(q => Math.abs(q.x - 2) + Math.abs(q.y - 5)));
+      g.tile(3, 5).h = 1;
+      log.upCost = g.walkCost(s, { x: 3, y: 5 });
+      log.flatCost = g.walkCost(s, { x: 2, y: 7 });
+      log.tooFar = await g.doMove(s, { x: 6, y: 5 });
+      g.tile(3, 5).h = 0;
+      const hand0 = s.hand.length;
+      log.m1 = await g.doMove(s, { x: 3, y: 5 });
+      log.afterFirst = [s.moveLeft, s.movedThisTurn, s.turnDone, hand0 === s.hand.length];
+      log.m2 = await g.doMove(s, { x: 4, y: 5 });
+      log.afterSecond = s.moveLeft;
+      log.canStill = g.canPlay(s, s.hand[0].uid).ok;
+    });
+    eq(log.max, [4, 4], 'moveMax and moveLeft equal effective SPD (1 + 3 points)');
+    { const gq = arena({ points: [{ hp: 0, atk: 4, def: 0, spd: 6 }] }); eq(gq.moveAllowance(gq.players[0]), CORE.MOVE_CAP, 'walking budget capped at MOVE_CAP (SPD 7 -> 4)');
+      gq.players[0].shards.spd = -2; eq(gq.moveAllowance(gq.players[0]), 4, 'SPD 5 -> 4 (cap)'); gq.players[0].shards.spd = -4; eq(gq.moveAllowance(gq.players[0]), 3, 'SPD 3 -> 3'); }
+    eq(log.reach, 4, 'walk targets reach exactly SPD tiles on flat ground');
+    eq([log.upCost, log.flatCost], [2, 2], 'walkCost: stepping up 1 level costs 2');
+    eq(log.tooFar, false, 'doMove refuses a tile beyond moveLeft');
+    eq(log.m1 && log.m2, true, 'two separate walks in one turn');
+    eq(log.afterFirst, [3, true, false, true], 'walking spends budget, sets Flow, never ends the turn, draws nothing');
+    eq(log.afterSecond, 2, 'second walk spends the rest of its cost');
+    eq(log.canStill, true, 'cards are still playable after walking');
+    // move then attack, attack then move
+    const g2 = arena({ cls: ['striker', 'vanguard'], pos: [[4, 5], [7, 5]], points: [{ hp: 4, atk: 3, def: 0, spd: 3 }, { hp: 4, atk: 0, def: 0, spd: 3 }] });
+    const s2 = g2.players[0], t2 = g2.players[1];
+    s2.deck = [{ uid: 601, id: 'jab' }, { uid: 602, id: 'jab' }, { uid: 603, id: 'bandage' }, { uid: 604, id: 'brace' }, { uid: 605, id: 'flare' }];
+    log = {};
+    await inTurn(g2, s2, async () => {
+      log.w = await g2.doMove(s2, { x: 6, y: 5 });
+      const h = t2.hp;
+      log.p = await g2.playCard(s2, s2.hand.find(c => c.id === 'jab').uid, [{ x: 7, y: 5 }]);
+      log.dmg = h - t2.hp;
+      log.w2 = await g2.doMove(s2, { x: 5, y: 5 });
+      log.left = s2.moveLeft;
+      log.p2 = await g2.playCard(s2, s2.hand.find(c => c.id === 'brace').uid, []);
+    });
+    eq([log.w, log.p, log.w2, log.p2], [true, true, true, true], 'walk, attack, walk again, play again');
+    eq(log.dmg, 2 + 4 + 2, 'walk-then-attack triggers Flow (Striker bonus)');
+    eq(log.left, 1, 'budget carries across card plays');
+    // root
+    const g3 = arena();
+    const r = g3.players[0];
+    await g3.addStatus(r, 'root', 2);
+    log = {};
+    await inTurn(g3, r, async () => { log.left = r.moveLeft; log.t = g3.walkTargets(r).length; log.m = await g3.doMove(r, { x: 5, y: 6 }); });
+    eq([log.left, log.t, log.m], [0, 0, false], 'rooted: moveLeft 0, no walk targets, doMove refused');
+    // root picked up mid-walk (own trap ignored, enemy trap roots)
+    const g4 = arena({ pos: [[2, 2], [9, 9]] });
+    const w = g4.players[0];
+    g4.tile(3, 2).trap = { ownerId: 1, kind: 'snare', dmg: 1, root: true };
+    log = {};
+    await inTurn(g4, w, async () => { await g4.doMove(w, { x: 3, y: 2 }); log.left = w.moveLeft; log.t = g4.walkTargets(w).length; });
+    eq([log.left, log.t], [0, 0], 'stepping on a snare mid-turn ends walking');
+    eq(g4.walkTargets(w).length, 0, 'no walking outside your turn');
   }
   {
     // energy refill 3 + rings closed (max 6), draw up to 5

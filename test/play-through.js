@@ -9,7 +9,7 @@ const { open } = require('./browser');
   const { browser, page, errors } = await open(file, { width: w, height: h });
   await page.waitForTimeout(500);
   await page.click('#play');
-  const t0 = Date.now(); let turns = 0, shotElim = false, shotSpec = false;
+  const t0 = Date.now(); let turns = 0, shotElim = false, shotSpec = false, walks = 0, walkShot = false; const walkFails = [];
   while (Date.now() - t0 < 9 * 60e3) {
     const st = await page.evaluate(() => {
       const M = UI.debug.M;
@@ -28,14 +28,30 @@ const { open } = require('./browser');
     if (st.turn) {
       turns++;
       await page.evaluate(() => VIEW.setSpeed(12));
-      await page.click('#btn-end');
+      // Walk once through the UI (tap to preview, tap again to confirm) and check the turn did not end.
+      const w = await page.evaluate(() => {
+        const g = UI.debug.M.game, me = g.players[g.humanId], ts = g.walkTargets(me);
+        if (!ts.length) return null;
+        const t = ts[Math.floor(Math.random() * ts.length)], before = me.moveLeft;
+        const cost = g.walkCost ? g.walkCost(me, t) : null;
+        UI.onTileTap({ tile: t, entity: null }); UI.onTileTap({ tile: t, entity: null });
+        return { before, cost };
+      });
+      if (w) {
+        await page.waitForFunction(() => !UI.debug.M.busy, null, { timeout: 60000 });
+        const after = await page.evaluate(() => { const g = UI.debug.M.game, me = g.players[g.humanId]; return { left: me.moveLeft, turn: !!UI.debug.M.turn, alive: me.alive }; });
+        walks++;
+        if (after.alive && (!after.turn || after.left !== w.before - w.cost)) walkFails.push({ w, after });
+        if (!walkShot && after.turn) { walkShot = true; await page.waitForTimeout(600); await page.screenshot({ path: `${pre}-afterwalk.png` }); }
+      }
+      if (await page.evaluate(() => !!UI.debug.M.turn)) await page.click('#btn-end');
     }
     await page.waitForTimeout(150);
   }
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${pre}-end.png` });
   const r = await page.evaluate(() => ({ round: UI.debug.M.game.round, over: UI.debug.M.game.over, title: (document.querySelector('.end-title') || {}).textContent }));
-  console.log('human turns', turns, r, 'secs', Math.round((Date.now() - t0) / 1000));
+  console.log('human turns', turns, 'walks', walks, 'walk failures', JSON.stringify(walkFails), r, 'secs', Math.round((Date.now() - t0) / 1000));
   // Play Again then Back to Loadout through the menu
   if (await page.$('.end-modal [data-x="again"]')) {
     await page.click('.end-modal [data-x="again"]');

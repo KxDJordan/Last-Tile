@@ -99,13 +99,13 @@ var CORE = (function () {
     }
     return out;
   };
-  P.walkTargets = function (p) { return p.stance === 'act' ? [] : this.within(p, 2, true); };
+  P.walkCost = function (p, t) { return Math.abs(t.x - p.x) + Math.abs(t.y - p.y) + (this.tiles[t.y][t.x].h > this.tiles[p.y][p.x].h ? 1 : 0); };
+  P.walkTargets = function (p) { var g = this; return (p.moveLeft | 0) <= 0 ? [] : this.within(p, p.moveLeft, true).filter(function (t) { return g.walkCost(p, t) <= p.moveLeft; }); };
   P.card = function (p, uid) { var h = p.hand.filter(function (c) { return c.uid === uid; })[0]; return h ? DATA.CARDS[h.id] : null; };
   P.cardCost = function (p, uid) { var c = this.card(p, uid); return c ? c.cost : 0; };
   P.canPlay = function (p, uid) {
     var c = this.card(p, uid);
     if (!c) return { ok: false, reason: 'Not in hand' };
-    if (p.stance === 'move') return { ok: false, reason: 'Already moved' };
     if (c.cost > p.energy) return { ok: false, reason: 'Not enough Energy' };
     return { ok: true };
   };
@@ -217,13 +217,15 @@ var CORE = (function () {
     this.addLog(p.name + ' opens a cache');
   };
   P.doMove = async function (p, t) {
-    p.stance = 'move';
+    var c = this.walkCost(p, t);
+    if (c > p.moveLeft || this.occupied(t.x, t.y)) return false;
+    p.moveLeft -= c;
     await this.view.move(p, [{ x: p.x, y: p.y }, t], 'walk');
     p.x = t.x; p.y = t.y; p.movedThisTurn = true;
-    this.draw(p, 1);
     this.addLog(p.name + ' moves');
     await this.maybeCache(p);
     await this.view.refresh(this);
+    return true;
   };
   P.checkOver = function () {
     var alive = this.players.filter(function (p) { return p.alive; });
@@ -243,6 +245,7 @@ var CORE = (function () {
         if (!p.alive) continue;
         g.active = p; p.stance = null; p.gbUsedThisTurn = false; p.movedThisTurn = false;
         p.maxEnergy = Math.min(6, 3 + g.ringsClosed); p.energy = p.maxEnergy;
+        p.moveMax = g.stats(p).spd; p.moveLeft = p.moveMax;
         g.draw(p, 5 - p.hand.length);
         await g.view.turnStart(p);
         await g.view.refresh(g);

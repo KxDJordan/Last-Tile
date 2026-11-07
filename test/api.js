@@ -9,11 +9,18 @@ function randomHuman(rng) {
   const pick = a => a[Math.floor(rng() * a.length)];
   return {
     async takeTurn(g, p) {
-      if (rng() < 0.25) {
+      const walk = async () => {
         const w = g.walkTargets(p);
-        if (w.length) { await g.doMove(p, pick(w)); humanMoves++; if (g.walkTargets(p).length || g.canPlay(p, (p.hand[0] || {}).uid).ok) errors.push('turn not finished after doMove'); return; }
-      }
+        if (!w.length) return;
+        const t = pick(w), cost = g.walkCost(p, t), before = p.moveLeft;
+        if (cost == null || cost > before) errors.push('walkTargets offered an unaffordable tile');
+        if (await g.doMove(p, t)) { humanMoves++; if (p.alive && p.moveLeft !== before - cost && !g.hasStatus(p, 'root')) errors.push('moveLeft not reduced by walkCost'); }
+        else errors.push('doMove refused a walk target');
+        if (p.alive && !g.over && p.turnDone) errors.push('walking ended the turn');
+      };
+      if (rng() < 0.5) await walk();
       for (let i = 0; i < 10 && !g.over && p.alive; i++) {
+        if (rng() < 0.2) await walk();
         if (g.canUseGb(p).ok && rng() < 0.5) {
           const gb = DATA.GAMEBREAKERS[p.gb], picks = [];
           for (let k = 0; k < gb.pickCount; k++) { const t = g.gbTargets(p, picks); if (!t.length) break; picks.push(pick(t)); }
@@ -35,6 +42,7 @@ function randomHuman(rng) {
         const other = p.hand.find(h => DATA.CARDS[h.id].pickCount > 0 && g.canPlay(p, h.uid).ok);
         if (other) { const r = await g.playCard(p, other.uid, [{ x: -1, y: -1 }]); if (r) errors.push('illegal pick accepted'); }
       }
+      if (p.alive && !g.over && rng() < 0.5) await walk();
     },
     chooseCache(g, p, options) {
       caches++;

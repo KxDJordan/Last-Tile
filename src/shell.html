@@ -80,10 +80,10 @@
       </div>
       <div class="hand" id="hand"></div>
       <div class="hb-bar">
-        <button class="btn-move" id="btn-move"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Move</span></button>
+        <button class="btn-move" id="btn-move" aria-label="Walk"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Move</span><b id="btn-move-n">0/0</b></button>
         <div class="hb-vitals">
           <div class="hp-bar" id="hp-bar"><i class="hp-fill" id="hp-fill"></i><i class="hp-shield" id="hp-shield"></i><span id="hp-text">40 / 40</span></div>
-          <div class="energy" id="energy" aria-label="Energy"></div>
+          <div class="res-row"><div class="energy" id="energy" aria-label="Energy"></div><div class="movebar" id="movebar"></div></div>
         </div>
         <button class="btn-gb" id="btn-gb" aria-label="Gamebreaker"><span class="gb-ring" id="gb-ring"></span><span class="gb-core"><b id="gb-icon">✦</b><small id="gb-pct">0%</small></span></button>
         <button class="btn-end" id="btn-end">End<br>Turn</button>

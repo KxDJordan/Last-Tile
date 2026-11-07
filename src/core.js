@@ -2,7 +2,7 @@
 var CORE = (function () {
   'use strict';
   var f = Math.floor;
-  var STRIKER_BONUS = 3, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
+  var MOVE_CAP = 4, PHANTOM_TILES = 3, STRIKER_BONUS = 2, SURGE_STEP = 3, SUDDEN_DEATH_DELAY = 3;
   var SIZE = 12, HAND_MAX = 7, DRAW_TO = 5, RING_FIRST = 4, RING_EVERY = 3, RINGS_TOTAL = 5;
   var VIEW_STATUSES = { root: 1, sap: 1, curse: 1, renew: 1, veil: 1, tether: 1, undying: 1, finalform: 1, bastion: 1, perch: 1, vanish: 1, rotembrace: 1, aim: 1 };
   var P = DATA.patterns;
@@ -169,7 +169,7 @@ var CORE = (function () {
         id: i, index: i, name: name, cls: l.cls, variant: l.variant || cls.variants[0].id, colorIndex: colorIndex, color: DATA.TEAM_COLORS[colorIndex % 8],
         isHuman: isHuman, x: sp.x, y: sp.y, hp: 0, maxHp: 0, shield: 0, energy: 0, maxEnergy: 3,
         hand: [], deck: [], discard: [], meter: 0, gb: l.gb || cls.gamebreakers[0], gbUsedThisTurn: false, alive: true, place: null,
-        statuses: [], invisible: false, stance: null, movedThisTurn: false, movedLastTurn: false,
+        statuses: [], invisible: false, stance: null, moveMax: 0, moveLeft: 0, movedThisTurn: false, movedLastTurn: false, tilesMovedThisTurn: 0, tilesMovedLastTurn: 0,
         stats: { dmgDealt: 0, kills: 0, caches: 0, gbUsed: 0 },
         points: { hp: (l.points || {}).hp || 0, atk: (l.points || {}).atk || 0, def: (l.points || {}).def || 0, spd: (l.points || {}).spd || 0 },
         shards: { hp: 0, atk: 0, def: 0, spd: 0 }, turnFlags: {}, turnDone: false, phantomHitRound: -1, loadout: l
@@ -203,6 +203,8 @@ var CORE = (function () {
   G.hasStatus = function (p, type) { if (!p || !p.statuses) return null; for (var i = 0; i < p.statuses.length; i++) if (p.statuses[i].type === type) return p.statuses[i]; return null; };
   G.alivePlayers = function () { return this.players.filter(function (p) { return p.alive; }); };
   // During sudden death (after the first surge) the Rot Storm ignores Hexer's passive, Riftwalker and Rot Embrace.
+  // Walking budget per turn: effective SPD, capped.
+  G.moveAllowance = function (p) { return Math.max(0, Math.min(MOVE_CAP, this.stats(p).spd)); };
   G.corruptionDamage = function (p) { var d = 3 + 2 * this.ringsClosed + SURGE_STEP * this.surges; if (p && p.cls === 'hexer' && !this.surges) d = f(d / 2); return d; };
   G.rangeBonus = function (u, t) {
     if (!u || u.isDecoy) return 0;
@@ -275,8 +277,9 @@ var CORE = (function () {
   // ------------------------------------------------------------------ movement primitives
   G._setPos = function (e, x, y) {
     if (e.x === x && e.y === y) return;
+    var d = Math.abs(e.x - x) + Math.abs(e.y - y);
     e.x = x; e.y = y;
-    if (!e.isDecoy && e === this.active) e.movedThisTurn = true;
+    if (!e.isDecoy && e === this.active) { e.movedThisTurn = true; e.tilesMovedThisTurn = (e.tilesMovedThisTurn || 0) + d; }
   };
   G.moveAlong = function (e, path, mode) {
     var self = this;
@@ -347,8 +350,9 @@ var CORE = (function () {
     var pa = xy(a.x, a.y), pb = xy(b.x, b.y);
     // put both in place before animating so state is never overlapping
     a.x = pb.x; a.y = pb.y; b.x = pa.x; b.y = pa.y;
-    if (a === this.active) a.movedThisTurn = true;
-    if (b === this.active) b.movedThisTurn = true;
+    var sd = Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y);
+    if (a === this.active) { a.movedThisTurn = true; a.tilesMovedThisTurn = (a.tilesMovedThisTurn || 0) + sd; }
+    if (b === this.active) { b.movedThisTurn = true; b.tilesMovedThisTurn = (b.tilesMovedThisTurn || 0) + sd; }
     return Promise.all([this.view.move(a, [pa, pb], 'teleport'), this.view.move(b, [pb, pa], 'teleport')])
       .then(function () { return self._land(a); }).then(function () { return self._land(b); });
   };
@@ -461,7 +465,7 @@ var CORE = (function () {
     if (!corr && source !== 'dot') {
       if (p.cls === 'phantom' && p.phantomHitRound !== this.round) {
         p.phantomHitRound = this.round;
-        if (p.movedLastTurn) amt = Math.max(1, f(amt / 2));
+        if (p.tilesMovedLastTurn >= PHANTOM_TILES) amt = Math.max(1, f(amt / 2));
       }
       var veil = this.hasStatus(p, 'veil');
       if (veil) { amt = Math.max(1, f(amt / 2)); this._removeStatus(p, veil); }
@@ -561,6 +565,7 @@ var CORE = (function () {
     if (extra) for (var k in extra) st[k] = extra[k];
     p.statuses.push(st);
     if (type === 'vanish') p.invisible = true;
+    if (type === 'root') p.moveLeft = 0;
     return VIEW_STATUSES[type] ? Promise.resolve(this.view.status(p, type)) : resolved();
   };
   G.debuff = function (u, e, type, turns, extra) {
@@ -745,16 +750,28 @@ var CORE = (function () {
 
   // ------------------------------------------------------------------ controller API
   G._findCard = function (p, uid) { for (var i = 0; i < p.hand.length; i++) if (p.hand[i].uid === uid) return p.hand[i]; return null; };
+  // Free walking: any number of walks per turn, before, between or after cards, until moveLeft runs out.
+  G._canWalk = function (p) {
+    return !this.over && p === this.active && p.alive && !p.turnDone && !this.hasStatus(p, 'root') && p.moveLeft > 0;
+  };
   G.walkTargets = function (p) {
-    if (this.over || p !== this.active || !p.alive || p.turnDone || p.stance === 'act' || this.hasStatus(p, 'root')) return [];
-    return this.reachable(p, 2).map(function (n) { return xy(n.x, n.y); });
+    if (!this._canWalk(p)) return [];
+    return this.reachable(p, p.moveLeft).map(function (n) { return xy(n.x, n.y); });
+  };
+  // Cost of the cheapest walking path to `tile` (ignores the remaining budget), or null if no path exists.
+  G.walkCost = function (p, tile) {
+    if (!p || !tile) return null;
+    if (tile.x === p.x && tile.y === p.y) return 0;
+    var n = this.reachable(p, 99).filter(function (q) { return q.x === tile.x && q.y === tile.y; })[0];
+    return n ? n.cost : null;
   };
   G.doMove = function (p, dest) {
     var self = this;
-    if (!dest || !this.walkTargets(p).some(function (t) { return t.x === dest.x && t.y === dest.y; })) return Promise.resolve(false);
-    p.stance = 'move'; p.turnDone = true;
-    return this.walkTo(p, dest, 2)
-      .then(function () { if (p.alive) return self.draw(p, 1); })
+    if (!dest || !this._canWalk(p)) return Promise.resolve(false);
+    var node = this.reachable(p, p.moveLeft).filter(function (n) { return n.x === dest.x && n.y === dest.y; })[0];
+    if (!node) return Promise.resolve(false);
+    p.moveLeft -= node.cost;
+    return this.moveAlong(p, node.path, 'walk')
       .then(function () { return self.refresh(); })
       .then(function () { return true; });
   };
@@ -768,7 +785,7 @@ var CORE = (function () {
     if (this.over) return { ok: false, reason: 'Game over' };
     if (!p || !p.alive) return { ok: false, reason: 'Eliminated' };
     if (p !== this.active) return { ok: false, reason: 'Not your turn' };
-    if (p.turnDone || p.stance === 'move') return { ok: false, reason: 'You moved this turn' };
+    if (p.turnDone) return { ok: false, reason: 'Turn is over' };
     var c = this._findCard(p, uid);
     if (!c) return { ok: false, reason: 'Card not in hand' };
     var def = DATA.CARDS[c.id];
@@ -807,7 +824,6 @@ var CORE = (function () {
     picks = (picks || []).map(function (t) { return xy(t.x, t.y); });
     if (!this._validPicks(def, p, picks)) return Promise.resolve(false);
     p.energy -= this.cardCost(p, uid);
-    p.stance = 'act';
     p.hand.splice(p.hand.indexOf(c), 1);
     this._mod = null;
     if (def.cat === 'damage') {
@@ -829,7 +845,7 @@ var CORE = (function () {
   G.canUseGb = function (p) {
     if (this.over) return { ok: false, reason: 'Game over' };
     if (!p || !p.alive || p !== this.active) return { ok: false, reason: 'Not your turn' };
-    if (p.turnDone || p.stance === 'move') return { ok: false, reason: 'You moved this turn' };
+    if (p.turnDone) return { ok: false, reason: 'Turn is over' };
     if (p.gbUsedThisTurn) return { ok: false, reason: 'Already used this turn' };
     var gb = DATA.GAMEBREAKERS[p.gb];
     if (p.meter < gb.cost) return { ok: false, reason: 'Needs ' + gb.cost + ' charge' };
@@ -845,7 +861,7 @@ var CORE = (function () {
     var gb = DATA.GAMEBREAKERS[p.gb];
     picks = (picks || []).map(function (t) { return xy(t.x, t.y); });
     if (!this._validPicks(gb, p, picks)) return Promise.resolve(false);
-    p.stance = 'act'; p.gbUsedThisTurn = true; p.meter -= gb.cost; p.stats.gbUsed++;
+    p.gbUsedThisTurn = true; p.meter -= gb.cost; p.stats.gbUsed++;
     var tiles = gb.area(this, p, picks);
     return Promise.resolve(this.view.banner(p.name + ': ' + gb.name, 'gb'))
       .then(function () { return self.view.fx('gamebreaker', { gb: gb.id, user: p, picks: picks, tiles: tiles }); })
@@ -893,7 +909,7 @@ var CORE = (function () {
   G._turn = function (p) {
     var self = this;
     this.active = p; this.turnCount++;
-    p.movedThisTurn = false; p.stance = null; p.gbUsedThisTurn = false; p.turnDone = false; p.turnFlags = {};
+    p.movedThisTurn = false; p.tilesMovedThisTurn = 0; p.stance = null; p.gbUsedThisTurn = false; p.turnDone = false; p.turnFlags = {}; p.moveLeft = 0;
     return Promise.resolve(this.view.turnStart(p))
       .then(function () { if (p.isHuman) return self.view.banner('Your turn', 'turn'); })
       .then(function () { return self._startStatuses(p); })
@@ -901,6 +917,8 @@ var CORE = (function () {
         if (!p.alive || self.over) return;
         p.maxEnergy = Math.min(6, 3 + self.ringsClosed);
         p.energy = p.maxEnergy;
+        p.moveMax = self.moveAllowance(p);
+        p.moveLeft = self.hasStatus(p, 'root') ? 0 : p.moveMax;
         var need = Math.max(0, DRAW_TO - p.hand.length);
         return self.draw(p, need);
       })
@@ -915,7 +933,8 @@ var CORE = (function () {
       .then(function () {
         p.hand = p.hand.filter(function (c) { return !c.temp; });
         p.movedLastTurn = p.movedThisTurn;
-        p.stance = null; p.turnFlags = {}; p.turnDone = true;
+        p.tilesMovedLastTurn = p.tilesMovedThisTurn;
+        p.stance = null; p.turnFlags = {}; p.turnDone = true; p.moveLeft = 0;
         self.active = null;
         return self.refresh();
       });
@@ -989,6 +1008,6 @@ var CORE = (function () {
       });
   };
 
-  return { Game: Game, stubView: stubView, mulberry32: mulberry32, VIEW_METHODS: VIEW_METHODS, ringOf: ringOf,
+  return { Game: Game, stubView: stubView, STRIKER_BONUS: STRIKER_BONUS, MOVE_CAP: MOVE_CAP, PHANTOM_TILES: PHANTOM_TILES, mulberry32: mulberry32, VIEW_METHODS: VIEW_METHODS, ringOf: ringOf,
     RING_FIRST: RING_FIRST, RING_EVERY: RING_EVERY, RINGS_TOTAL: RINGS_TOTAL, HAND_MAX: HAND_MAX };
 })();

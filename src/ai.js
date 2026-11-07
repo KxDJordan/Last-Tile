@@ -10,7 +10,7 @@ var AI = (function () {
   var CLASS_AI = {
     vanguard: { ideal: 1, aggr: 1.0, heal: 1.0, shield: 1.3, elev: 0.2, retreat: 0.2 },
     striker: { ideal: 1, aggr: 1.15, heal: 1.0, shield: 0.9, elev: 0.0, retreat: 0.3, threat: 0.45 },
-    marksman: { ideal: 4, aggr: 1.0, heal: 1.1, shield: 1.0, elev: 1.0, retreat: 0.45, threat: 0.5 },
+    marksman: { ideal: 4, aggr: 1.0, heal: 1.1, shield: 1.0, elev: 1.0, retreat: 0.45, threat: 0.65 },
     phantom: { ideal: 2, aggr: 1.1, heal: 1.0, shield: 0.9, elev: 0.1, retreat: 0.35 },
     lifebinder: { ideal: 2, aggr: 0.95, heal: 1.3, shield: 1.0, elev: 0.2, retreat: 0.3 },
     hexer: { ideal: 3, aggr: 1.0, heal: 1.0, shield: 0.9, elev: 0.3, retreat: 0.35 }
@@ -45,18 +45,21 @@ var AI = (function () {
       if (!e.alive || g.ownerId(e) === me.id || !g.canAffect(me, e)) return;
       var o = g.ownerOf(e), os = g.stats(o);
       enemies.push({ e: e, x: e.x, y: e.y, hp: o.hp, maxHp: o.maxHp, shield: o.shield, def: os.def, atk: os.atk, cls: o.cls,
-        phantomHalf: o.cls === 'phantom' && o.movedLastTurn && o.phantomHitRound !== g.round, statuses: o.statuses, immovable: g.isImmovable(e) });
+        phantomHalf: o.cls === 'phantom' && o.tilesMovedLastTurn >= CORE.PHANTOM_TILES && o.phantomHitRound !== g.round, statuses: o.statuses, immovable: g.isImmovable(e) });
     });
-    enemies.forEach(function (en) { en.pen = Math.max(0, en.def - 1) * 0.6 + Math.min(en.shield, 10) * 0.08 + (en.hp / en.maxHp) * 1.0; });
+    enemies.forEach(function (en) { en.pen = Math.max(0, en.def - 1) * 0.35 + Math.min(en.shield, 10) * 0.08 + (en.hp / en.maxHp) * 1.0; });
     var hpFrac = me.hp / me.maxHp;
     var ideal = cw.ideal + (hpFrac < cw.retreat ? 2 : 0);
     var mod = { add: 0, mult: 1 };
-    if (me.cls === 'striker' && !me.turnFlags.strikerUsed && me.movedThisTurn) mod.add += 3;
+    if (me.cls === 'striker' && !me.turnFlags.strikerUsed && me.movedThisTurn) mod.add += CORE.STRIKER_BONUS;
     var aim = g.hasStatus(me, 'aim'); if (aim) mod.add += aim.amount || 0;
     if (g.hasStatus(me, 'vanishdmg')) mod.mult = 2;
     var threatW = (cw.threat || 0.25) * (hpFrac < 0.5 ? 1.8 : 1) * (30 / Math.max(15, me.hp + me.shield));
     var ctx = { g: g, me: me, s: s, cw: cw, enemies: enemies, hpFrac: hpFrac, ideal: ideal, mod: mod, corr: g.corruptionDamage(me), threatW: threatW };
     ctx.V = valueMap(ctx);
+    ctx.walk = g.walkTargets(me).length ? g.reachable(me, me.moveLeft) : [];
+    ctx.walkSet = {};
+    ctx.walk.forEach(function (n) { ctx.walkSet[n.x + ',' + n.y] = n.cost; });
     return ctx;
   }
   function enemyAt(ctx, x, y) { for (var i = 0; i < ctx.enemies.length; i++) if (ctx.enemies[i].x === x && ctx.enemies[i].y === y) return ctx.enemies[i]; return null; }
@@ -89,6 +92,7 @@ var AI = (function () {
         v -= 0.3 * Math.max(Math.abs(x - 5.5), Math.abs(y - 5.5));
         if (t.cache) v += 4.5;
         if (t.marked && !g.hasStatus(me, 'skyfall')) v -= 9;
+        if (t.perchLock === me.id) v += 6;   // stay on our Eagle's Perch
         v += t.h * ctx.cw.elev;
         if (ctx.enemies.length) {
           var nd = 99, adj = 0, near = 0, bestT = 99;
@@ -136,7 +140,9 @@ var AI = (function () {
   // Best damage I could deal from `from` with remaining energy (excluding a card uid).
   function potential(ctx, from, energy, excludeUid) {
     var g = ctx.g, me = ctx.me, best = 0;
-    var proxy = Object.create(me); proxy.x = from.x; proxy.y = from.y; proxy.movedThisTurn = true;
+    var moved = (from.x !== me.x || from.y !== me.y) ? true : me.movedThisTurn;
+    var proxy = Object.create(me); proxy.x = from.x; proxy.y = from.y; proxy.movedThisTurn = moved;
+    var flowAdd = me.cls === 'striker' && !me.turnFlags.strikerUsed && moved ? CORE.STRIKER_BONUS : 0;
     for (var i = 0; i < me.hand.length; i++) {
       var c = me.hand[i]; if (c.uid === excludeUid) continue;
       var def = DATA.CARDS[c.id]; if (def.cat !== 'damage' || !REACH[c.id]) continue;
@@ -144,7 +150,7 @@ var AI = (function () {
       for (var j = 0; j < ctx.enemies.length; j++) {
         var en = ctx.enemies[j];
         if (!reaches(g, REACH[c.id], from, en)) continue;
-        var raw = def.amt(g, proxy, en.e, [], ctx.s);
+        var raw = def.amt(g, proxy, en.e, [], ctx.s) + flowAdd;
         var v = dmgValue(ctx, en, raw, def.hits || 1, def.pierce);
         if (v > best) best = v;
       }
@@ -223,6 +229,8 @@ var AI = (function () {
         var eLeft = energy - cost;
         var pot = potential(ctx, dest, eLeft, c.uid) - potential(ctx, cur, eLeft, c.uid);
         var v2 = base + gain + 0.7 * pot + (hasFlowCards(ctx) ? 2 : 0);
+        // a tile we could simply walk to is worth nothing extra; only the card's rider counts
+        if (ctx.walkSet[dest.x + ',' + dest.y] !== undefined) v2 = base - 0.5;
         var proxy = { x: dest.x, y: dest.y };
         if (def.ai.adjDmg) ctx.enemies.forEach(function (en) { if (dist(en, proxy) === 1) v2 += dmgValue(ctx, en, def.ai.adjDmg(s), 1, false); });
         if (def.ai.oneDmg) { var bb = 0; ctx.enemies.forEach(function (en) { if (dist(en, proxy) === 1) bb = Math.max(bb, dmgValue(ctx, en, def.ai.oneDmg(s), 1, false)); }); v2 += bb; }
@@ -329,9 +337,9 @@ var AI = (function () {
           var en = enemyAt(ctx, r.hit.x, r.hit.y); if (!en) return;
           consider([t], dmgValue(ctx, en, 3 + s.def + s.atk, 1, false) + displaceValue(ctx, en, simPush(g, en, r.d, 3), false));
         }); break;
-      case 'last_bastion': if (near4 && ctx.hpFrac < 0.8) consider([], (s.def * 2 + 3) * 0.8 + 3 * near4); break;
+      case 'last_bastion': if (near4 && ctx.hpFrac < 0.8) consider([], (s.def + 3) * 0.8 + 3 * near4); break;
       case 'earthshatter': {
-        var v = 0; P.around(g, me).forEach(function (t) { var en = enemyAt(ctx, t.x, t.y); if (en) v += dmgValue(ctx, en, 2 + s.def * 2, 1, false) + 2; });
+        var v = 0; P.around(g, me).forEach(function (t) { var en = enemyAt(ctx, t.x, t.y); if (en) v += dmgValue(ctx, en, 1 + s.def * 2, 1, false) + 2; });
         consider([], v); break;
       }
       case 'thousand_cuts': {
@@ -428,20 +436,23 @@ var AI = (function () {
       }
       perCard.push({ score: cbest, cost: g.cardCost(me, c.uid) });
     }
-    if (best) {
-      // rough value of the whole Act stance: best cards that fit in the energy budget
-      perCard.sort(function (a, b) { return b.score - a.score; });
-      var e = me.energy, tot = 0;
-      perCard.forEach(function (pc) { if (pc.score > PLAY_THRESHOLD && pc.cost <= e) { e -= pc.cost; tot += pc.score; } });
-      best.total = Math.max(best.score, tot * 0.8);
-    }
     return best;
   }
+  // Best free walk: position gain plus how much better our attacks would be from there.
+  // dPot > 0 means walking first improves what the cards in hand can do (walk-then-act);
+  // otherwise walking is pure repositioning, done after the cards (act-then-walk, kiting).
   function bestWalk(ctx) {
-    var g = ctx.g, me = ctx.me, best = null;
-    g.walkTargets(me).forEach(function (t) {
-      var sc = ctx.V[t.y][t.x] - ctx.V[me.y][me.x] + 1.0 + 0.5 * potential(ctx, t, 0, null);
-      if (!best || sc > best.score) best = { dest: t, score: sc };
+    var me = ctx.me, best = null;
+    if (!ctx.walk.length) return null;
+    var cur = { x: me.x, y: me.y };
+    var potNow = potential(ctx, cur, me.energy, null);
+    var budgetLeft = me.moveLeft;
+    ctx.walk.forEach(function (n) {
+      var dV = ctx.V[n.y][n.x] - ctx.V[cur.y][cur.x];
+      var dPot = me.energy > 0 ? potential(ctx, n, me.energy, null) - potNow : 0;
+      // keep some budget for later unless the move is clearly worth it
+      var sc = dV + 0.9 * dPot - 0.12 * n.cost * (budgetLeft > 0 ? 1 : 0);
+      if (!best || sc > best.score) best = { dest: { x: n.x, y: n.y }, score: sc, dPot: dPot, dV: dV };
     });
     return best;
   }
@@ -463,13 +474,17 @@ var AI = (function () {
           return wait(g).then(function () { return g.useGb(me, gbOpt.picks); }).then(function (ok) { if (!ok) fails++; return step(); });
         }
         var act = bestCardAction(ctx, banned);
-        if (me.stance === null) {
-          var walk = bestWalk(ctx);
-          if (walk && (!act || act.total < walk.score)) {
-            return wait(g).then(function () { return g.doMove(me, walk.dest); });
-          }
+        var walk = bestWalk(ctx);
+        var doWalk = function () {
+          actions++;
+          return wait(g).then(function () { return g.doMove(me, walk.dest); }).then(function (ok) { if (!ok) fails++; return step(); });
+        };
+        // walk first when it sets up better attacks (cards stay playable afterwards)
+        if (walk && walk.dPot > 0.5 && walk.score > 0.5) return doWalk();
+        if (!act || act.score <= PLAY_THRESHOLD) {
+          if (walk && walk.score > 0.4) return doWalk();
+          return Promise.resolve();
         }
-        if (!act || act.score <= PLAY_THRESHOLD) return Promise.resolve();
         actions++;
         return wait(g).then(function () { return g.playCard(me, act.uid, act.picks); })
           .then(function (ok) { if (!ok) { banned[act.uid] = true; fails++; } return step(); });
@@ -497,5 +512,5 @@ var AI = (function () {
     return { takeTurn: takeTurn, chooseCache: chooseCache, isBot: true };
   }
 
-  return { createController: createController, CLASS_AI: CLASS_AI, perceive: perceive, REACH: REACH, _score: scoreCard, _walk: bestWalk, _gb: bestGb };
+  return { createController: createController, CLASS_AI: CLASS_AI, perceive: perceive, REACH: REACH, _score: scoreCard, _walk: bestWalk, _gb: bestGb, MAX_ACTIONS: MAX_ACTIONS };
 })();
