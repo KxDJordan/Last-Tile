@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LAST TILE - VIEW sandbox</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #fff; }
+  #stage { position: absolute; inset: 0; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  .hud-top { position: absolute; left: 0; right: 0; top: 0; height: 104px; background: linear-gradient(rgba(10,8,30,.85), rgba(10,8,30,0)); pointer-events: none; padding: 10px 14px; box-sizing: border-box; font: 800 15px Cinzel, Georgia, serif; letter-spacing: .08em; }
+  .hud-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 240px; background: linear-gradient(rgba(10,8,30,0), rgba(10,8,30,.92) 30%); pointer-events: none; }
+  .hud-bot .cards { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+  .hud-bot .card { width: 62px; height: 92px; border-radius: 8px; background: linear-gradient(#2a2450, #15112c); border: 2px solid #6a5ac0; }
+  .hidehud .hud-top, .hidehud .hud-bot { display: none; }
+  #sheet { position: absolute; inset: 0; display: none; }
+  .lbl { position: absolute; transform: translate(-50%, 0); font: 700 11px Inter, system-ui, sans-serif; text-shadow: 0 1px 3px #000; white-space: nowrap; text-align: center; }
+  .lbl b { display: block; font: 800 9px Inter, sans-serif; opacity: .65; letter-spacing: .1em; text-transform: uppercase; }
+  #ped { position: absolute; left: 0; top: 0; width: 100%; height: 50%; display: none; }
+  #log { position: absolute; left: 6px; bottom: 6px; font: 10px monospace; color: #aaa; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="overlay"></div>
+<div class="hud-top">ROUND 4 · RING IN 2</div>
+<div class="hud-bot"><div class="cards"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></div></div>
+<div id="sheet"></div>
+<canvas id="ped"></canvas>
+<div id="log"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../src/data.js"></script>
+<script src="../src/view.js"></script>
+<script>
+(function () {
+  var Q = new URLSearchParams(location.search), mode = Q.get('mode') || 'board';
+  var N = 12;
+  function rng(seed) { var s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  var R = rng(+(Q.get('seed') || 7));
+  var CLS = ['vanguard', 'striker', 'marksman', 'phantom', 'lifebinder', 'hexer'];
+  var VAR = { vanguard: ['bastion', 'colossus', 'warden'], striker: ['brawler', 'duelist', 'tempest'], marksman: ['ranger', 'gunslinger', 'artillerist'], phantom: ['shade', 'specter', 'veilblade'], lifebinder: ['verdant', 'seraph', 'blood_oracle'], hexer: ['rotcaller', 'witchlight', 'void_mask'] };
+  var GBS = { vanguard: 'iron_tide', striker: 'final_form', marksman: 'railpiercer', phantom: 'vanish', lifebinder: 'siphon_field', hexer: 'collapse' };
+  var TEAM = (typeof DATA !== 'undefined' && DATA.TEAM_COLORS) || ['#ffd84d', '#ff5a5a', '#4da6ff', '#5dff8a', '#c77dff', '#ff9a3c', '#3cf0e0', '#ff6fc8'];
+
+  // ---------------------------------------------------------------- mock game
+  function makeGame() {
+    var hraw = [], tiles = [], x, y;
+    for (y = 0; y < N; y++) { hraw.push([]); for (x = 0; x < N; x++) hraw[y].push(R()); }
+    for (var pass = 0; pass < 2; pass++) { var nh = []; for (y = 0; y < N; y++) { nh.push([]); for (x = 0; x < N; x++) { var s = 0, c = 0; for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) { var yy = y + dy, xx = x + dx; if (yy >= 0 && xx >= 0 && yy < N && xx < N) { s += hraw[yy][xx]; c++; } } nh[y].push(s / c); } } hraw = nh; }
+    for (y = 0; y < N; y++) { tiles.push([]); for (x = 0; x < N; x++) {
+      var v = hraw[y][x], h = v > 0.58 ? 2 : v > 0.5 ? 1 : 0, ring = Math.min(x, y, N - 1 - x, N - 1 - y);
+      if (ring >= 5) h = Math.min(h, 1);
+      tiles[y].push({ x: x, y: y, h: h, ring: ring, corrupted: false, warning: false, pillar: false, cache: null, trap: null, marked: false });
+    } }
+    [[3, 2], [8, 3], [2, 7], [9, 8], [5, 9], [7, 5], [4, 4], [10, 5]].forEach(function (p) { tiles[p[1]][p[0]].pillar = true; });
+    [[1, 4], [10, 2], [4, 10], [6, 2], [2, 9], [9, 10], [7, 7], [3, 6]].forEach(function (p) { tiles[p[1]][p[0]].cache = {}; });
+    tiles[1][1].h = 3;
+    var players = [], spawns = [[2, 1], [6, 1], [10, 3], [10, 7], [7, 10], [3, 10], [1, 6], [5, 5]];
+    var roster = [['vanguard', 0], ['striker', 1], ['marksman', 2], ['phantom', 0], ['lifebinder', 1], ['hexer', 2], ['vanguard', 1], ['phantom', 2]];
+    var names = ['You', 'Kestrel', 'Morrow', 'Vex', 'Lumen', 'Grimsby', 'Tallow', 'Nyx'];
+    for (var i = 0; i < 8; i++) {
+      var cls = roster[i][0], sp = spawns[i];
+      tiles[sp[1]][sp[0]].pillar = false; tiles[sp[1]][sp[0]].cache = null;
+      var maxHp = 30 + Math.floor(R() * 20);
+      players.push({ id: i, index: i, name: names[i], cls: cls, variant: VAR[cls][roster[i][1]], colorIndex: i, color: TEAM[i], isHuman: i === 0, x: sp[0], y: sp[1], hp: Math.floor(maxHp * (0.35 + R() * 0.65)), maxHp: maxHp, shield: i % 3 === 0 ? 5 : 0, energy: 3, maxEnergy: 3, hand: [], deck: [], discard: [], meter: i % 2 ? 100 : 20, gb: GBS[cls], alive: true, statuses: [], invisible: false, stats: {} });
+    }
+    var g = { size: N, tiles: tiles, players: players, entities: players.slice(), round: 4, ringsClosed: 0, nextRingIn: 2, active: players[0], humanId: 0, log: [], tile: function (x, y) { return tiles[y] && tiles[y][x] || null; } };
+    return g;
+  }
+  var game = makeGame();
+  window.game = game;
+  function ringTiles(r) { var out = []; for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) if (game.tiles[y][x].ring === r) out.push({ x: x, y: y }); return out; }
+  function sweepOrder(r) { // clockwise around the ring
+    var out = [], a = r, b = N - 1 - r, x, y;
+    for (x = a; x <= b; x++) out.push({ x: x, y: a }); for (y = a + 1; y <= b; y++) out.push({ x: b, y: y });
+    for (x = b - 1; x >= a; x--) out.push({ x: x, y: b }); for (y = b - 1; y > a; y--) out.push({ x: a, y: y });
+    return out;
+  }
+  function setRing(r, key, val) { ringTiles(r).forEach(function (t) { game.tiles[t.y][t.x][key] = val; if (key === 'corrupted' && val) game.tiles[t.y][t.x].cache = null; }); }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function log(s) { document.getElementById('log').textContent = s; }
+
+  // ---------------------------------------------------------------- demo actions
+  var P = game.players;
+  var A = {
+    corruptedState: async function () {
+      setRing(0, 'corrupted', true); setRing(1, 'warning', true);
+      game.tiles[3][3].corrupted = true; game.tiles[4][2].corrupted = true;
+      game.tiles[5][5].trap = { ownerId: 0, kind: 'snare' }; game.tiles[6][8].trap = { ownerId: 0, kind: 'caltrops' }; game.tiles[6][9].trap = { ownerId: 3, kind: 'caltrops' };
+      for (var y = 6; y <= 8; y++) for (var x = 4; x <= 6; x++) game.tiles[y][x].marked = true;
+      var all = []; for (var yy = 0; yy < N; yy++) for (var xx = 0; xx < N; xx++) all.push({ x: xx, y: yy });
+      await VIEW.tilesChanged(all);
+    },
+    walk: function () { var p = P[1]; var path = [{ x: p.x, y: p.y }, { x: p.x, y: p.y + 1 }, { x: p.x + 1, y: p.y + 1 }]; p.x += 1; p.y += 1; return VIEW.move(p, path, 'walk'); },
+    dash: function () { var p = P[2]; var path = [{ x: p.x, y: p.y }, { x: p.x - 1, y: p.y }, { x: p.x - 2, y: p.y }, { x: p.x - 3, y: p.y }]; p.x -= 3; return VIEW.move(p, path, 'dash'); },
+    teleport: function () { var p = P[3]; var path = [{ x: p.x, y: p.y }, { x: p.x - 2, y: p.y - 1 }]; p.x -= 2; p.y -= 1; return VIEW.move(p, path, 'teleport'); },
+    push: async function () { var p = P[6]; var path = [{ x: p.x, y: p.y }, { x: p.x + 1, y: p.y }]; p.x += 1; await VIEW.move(p, path, 'push'); await VIEW.collide(p, { dx: 1, dy: 0 }); await VIEW.hit(p, 2, { pierce: true, source: 'collision' }); },
+    melee: async function () { var u = P[7], t = P[4]; await VIEW.attack(u, { style: 'melee', from: { x: u.x, y: u.y }, target: { x: u.x + 1, y: u.y }, tiles: [{ x: u.x + 1, y: u.y }], cardId: 'jab' }); },
+    projectile: async function () { var u = P[2], t = P[0]; await VIEW.attack(u, { style: 'projectile', from: { x: u.x, y: u.y }, target: { x: t.x, y: t.y }, tiles: [{ x: t.x, y: t.y }] }); t.hp -= 6; await VIEW.hit(t, 6, { source: 'card', absorbed: 3 }); VIEW.refresh(game); },
+    beam: async function () { var u = P[4]; var tiles = [1, 2, 3, 4].map(function (i) { return { x: u.x, y: u.y - i }; }); await VIEW.attack(u, { style: 'beam', from: { x: u.x, y: u.y }, target: tiles[0], tiles: tiles, color: '#7affd8' }); },
+    area: async function () { var u = P[0]; var t = []; for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) if (dx || dy) t.push({ x: u.x + dx, y: u.y + dy }); await VIEW.attack(u, { style: 'area', from: { x: u.x, y: u.y }, target: { x: u.x, y: u.y }, tiles: t }); },
+    heal: function () { P[4].hp = Math.min(P[4].maxHp, P[4].hp + 7); VIEW.refresh(game); return VIEW.heal(P[4], 7); },
+    shield: function () { P[1].shield = 6; VIEW.refresh(game); return VIEW.shield(P[1], 6); },
+    corruptionHit: function () { P[5].hp -= 5; VIEW.refresh(game); return VIEW.hit(P[5], 5, { source: 'corruption' }); },
+    bigHit: function () { P[6].hp -= 14; VIEW.refresh(game); return VIEW.hit(P[6], 14, { source: 'card', big: true }); },
+    status: function () { return VIEW.status(P[3], 'root'); },
+    decoys: async function () { var d1 = { id: 'd1', isDecoy: true, ownerId: 3, x: P[3].x + 1, y: P[3].y + 1, alive: true }, d2 = { id: 'd2', isDecoy: true, ownerId: 3, x: P[3].x - 1, y: P[3].y + 1, alive: true }; game.entities.push(d1, d2); await Promise.all([VIEW.spawn(d1), VIEW.spawn(d2)]); },
+    decoyHit: async function () { var d = game.entities.find(function (e) { return e.isDecoy; }); if (!d) return; await VIEW.fx('decoy-hit', { entity: d }); game.entities.splice(game.entities.indexOf(d), 1); await VIEW.remove(d); },
+    invisible: function () { P[3].invisible = true; P[0].invisible = true; return VIEW.refresh(game); },
+    visible: function () { P[3].invisible = false; P[0].invisible = false; return VIEW.refresh(game); },
+    death: async function () { var p = P[5]; p.hp = 0; p.alive = false; await VIEW.death(p, 7); },
+    cache: async function () { var t = { x: 7, y: 7 }; game.tiles[7][7].cache = null; await VIEW.fx('cache-open', { entity: P[7], tile: t }); },
+    raise: async function () { var t = [{ x: 6, y: 4 }, { x: 7, y: 4 }]; t.forEach(function (q) { game.tiles[q.y][q.x].h = Math.min(2, game.tiles[q.y][q.x].h + 1); }); await VIEW.fx('tile-raise', { tiles: t }); },
+    trapTrigger: async function () { game.tiles[6][9].trap = null; await VIEW.fx('trap-trigger', { tile: { x: 9, y: 6 }, entity: P[3] }); },
+    cleanse: async function () { var t = [{ x: 3, y: 3 }, { x: 2, y: 4 }]; t.forEach(function (q) { game.tiles[q.y][q.x].corrupted = false; }); await VIEW.fx('cleanse', { tiles: t }); },
+    ringWarning: async function () { setRing(1, 'warning', true); await VIEW.ringWarning(1, ringTiles(1)); },
+    ringClose: async function () { var r = 1; setRing(r, 'warning', false); setRing(r, 'corrupted', true); await VIEW.ringClose(r, sweepOrder(r)); },
+    turn: function () { var i = (game.players.indexOf(game.active) + 1) % 8; while (!P[i].alive) i = (i + 1) % 8; game.active = P[i]; return VIEW.turnStart(P[i]); },
+    highlight: function () { var u = P[0], t = [], a = []; for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 2 && (dx || dy)) t.push({ x: u.x + dx, y: u.y + dy }); a.push({ x: u.x + 1, y: u.y }, { x: u.x + 2, y: u.y }); VIEW.highlight({ targets: t, area: a, color: '#ff4d5e' }); return Promise.resolve(); },
+    gb: function (id, extra) { var u = extra && extra.user != null ? P[extra.user] : P[0]; var d = { gb: id, user: u, picks: (extra && extra.picks) || [{ x: u.x + 1, y: u.y }], tiles: (extra && extra.tiles) || [] }; return VIEW.fx('gamebreaker', d); }
+  };
+  window.SANDBOX = { A: A, game: game, ringTiles: ringTiles, sweepOrder: sweepOrder, setRing: setRing };
+
+  async function demoLoop() {
+    var seq = ['walk', 'dash', 'teleport', 'push', 'melee', 'projectile', 'beam', 'area', 'heal', 'shield', 'corruptionHit', 'bigHit', 'status', 'decoys', 'decoyHit', 'cache', 'raise', 'trapTrigger', 'cleanse', 'ringWarning', 'ringClose', 'turn', 'highlight', 'death'];
+    for (var i = 0; i < seq.length; i++) { log(seq[i]); await A[seq[i]](); await VIEW.wait(250); }
+    var gbs = ['iron_tide', 'last_bastion', 'earthshatter', 'thousand_cuts', 'blitz_chain', 'final_form', 'railpiercer', 'skyfall_volley', 'eagles_perch', 'grand_swap', 'mirror_legion', 'vanish', 'undying_pulse', 'siphon_field', 'blood_tether', 'collapse', 'blight_bloom', 'rot_embrace', 'unknown_thing'];
+    for (var j = 0; j < gbs.length; j++) { log('gb ' + gbs[j]); await A.gb(gbs[j], { picks: [{ x: 6, y: 6 }, { x: 2, y: 1 }], tiles: [{ x: 5, y: 5 }, { x: 6, y: 5 }, { x: 7, y: 5 }, { x: 5, y: 6 }, { x: 6, y: 6 }, { x: 7, y: 6 }, { x: 5, y: 7 }, { x: 6, y: 7 }, { x: 7, y: 7 }] }); await VIEW.wait(200); }
+    log('demo done'); window.DEMO_DONE = true;
+  }
+
+  // ---------------------------------------------------------------- contact sheet
+  function sheet() {
+    document.body.classList.add('hidehud');
+    var host = document.getElementById('sheet'); host.style.display = 'block';
+    VIEW.mount(document.getElementById('stage'), document.getElementById('overlay'));
+    VIEW.stop();
+    var r = VIEW._debug.renderer(), W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
+    var scene = new THREE.Scene(); scene.environment = VIEW._debug.scene().environment;
+    scene.background = new THREE.Color(0x1a1438);
+    var key = new THREE.DirectionalLight(0xffd2a0, 2.5); key.position.set(-7, 14, 8); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+    var sc = key.shadow.camera; sc.left = -8; sc.right = 8; sc.top = 8; sc.bottom = -8; scene.add(key);
+    scene.add(new THREE.HemisphereLight(0x8c9cff, 0x3a2446, 0.8));
+    var rim = new THREE.DirectionalLight(0x9cbcff, 1.25); rim.position.set(0, 7, -10); scene.add(rim);
+    var floorMat = new THREE.MeshStandardMaterial({ color: 0x8a7a68, roughness: 0.9 });
+    var cols = 3, rows = 6, sx = 1.3, sz = 1.55;
+    var cam = new THREE.PerspectiveCamera(28, W / H, 0.1, 200);
+    var labels = [];
+    CLS.forEach(function (c, ri) {
+      VAR[c].forEach(function (v, ci) {
+        var x = (ci - 1) * sx, z = (ri - 2.5) * sz;
+        var f = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.2, 1.15), floorMat); f.position.set(x, -0.1, z); f.receiveShadow = true; scene.add(f);
+        var p = VIEW.buildPiece(c, v, TEAM[(ri * 3 + ci) % 8]); p.position.set(x, 0, z);
+        p.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+        scene.add(p); labels.push({ p: p, c: c, v: v });
+      });
+    });
+    var dist = 19, pitch = +(Q.get('pitch') || 0.84), yaw = +(Q.get('yaw') || 0);
+    cam.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(0, 0.3, 0.2);
+    var zoom = +(Q.get('zoom') || 1); cam.zoom = zoom; cam.updateProjectionMatrix();
+    var els = labels.map(function (l) { var e = document.createElement('div'); e.className = 'lbl'; e.innerHTML = l.v.replace('_', ' ') + ' <b>' + l.c + '</b>'; host.appendChild(e); return e; });
+    var t0 = performance.now();
+    function loop() {
+      var t = (performance.now() - t0) / 1000 + 1.3;
+      labels.forEach(function (l, i) { if (l.p.userData.idle) l.p.userData.idle(t + i); l.p.userData.model.rotation.y = +(Q.get('turn') || 0); var v = new THREE.Vector3(l.p.position.x, -0.1, l.p.position.z + 0.62).project(cam); els[i].style.left = ((v.x * 0.5 + 0.5) * W) + 'px'; els[i].style.top = ((-v.y * 0.5 + 0.5) * H - 8) + 'px'; });
+      r.setSize(W * dpr, H * dpr, false); r.setViewport(0, 0, W * dpr, H * dpr); r.setClearColor(0x1a1438, 1);
+      r.render(scene, cam);
+      if (++frames < 6) requestAnimationFrame(loop); else window.SHEET_READY = true;
+    }
+    var frames = 0; loop();
+  }
+
+  // ---------------------------------------------------------------- pedestal
+  function pedMode() {
+    document.body.classList.add('hidehud');
+    var cv = document.getElementById('ped'); cv.style.display = 'block';
+    var ped = VIEW.pedestal(cv); ped.set(Q.get('cls') || 'vanguard', Q.get('variant') || 'bastion', 0);
+    window.PED = ped;
+    var img = new Image(); img.src = VIEW.portrait(Q.get('cls') || 'vanguard', Q.get('variant') || 'bastion', 0); img.style.cssText = 'position:absolute;left:10px;top:55%;width:96px;height:96px;background:#2a2450;border-radius:50%';
+    document.body.appendChild(img);
+    var x = 116; CLS.forEach(function (c, i) { var im = new Image(); im.src = VIEW.portrait(c, VAR[c][i % 3], i); im.style.cssText = 'position:absolute;left:' + x + 'px;top:57%;width:44px;height:44px;background:#2a2450;border-radius:50%;border:2px solid ' + TEAM[i]; x += 50; document.body.appendChild(im); });
+    window.SHEET_READY = true;
+  }
+
+  // ---------------------------------------------------------------- boot
+  if (mode === 'sheet') { sheet(); return; }
+  if (mode === 'ped') { pedMode(); return; }
+  if (Q.get('nohud')) document.body.classList.add('hidehud');
+  VIEW.mount(document.getElementById('stage'), document.getElementById('overlay'));
+  VIEW.setInsets({ top: 104, bottom: 240 });
+  VIEW.setHumanId(0);
+  VIEW.onTap = function (hit) { log('tap ' + JSON.stringify({ tile: hit.tile, entity: hit.entity && hit.entity.id })); window.LAST_TAP = hit; };
+  VIEW.init(game).then(function () { return VIEW.turnStart(P[0]); }).then(function () {
+    window.READY = true;
+    if (mode === 'demo') demoLoop();
+  });
+})();
+</script>
+</body>
+</html>

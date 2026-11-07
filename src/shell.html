@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0a24">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>LAST TILE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;800&display=swap">
+<style>/*__STYLE__*/</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ LOADOUT ============ -->
+  <section id="loadout" class="screen" aria-label="Loadout">
+    <div class="lo-stage" id="lo-stage">
+      <div class="lo-canvas-wrap" id="lo-canvas-wrap"></div>
+      <div class="lo-fallback" id="lo-fallback" aria-hidden="true"></div>
+      <div class="lo-brand"><span>LAST</span> TILE</div>
+      <button class="lo-arrow lo-prev" id="lo-prev" aria-label="Previous class"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="lo-arrow lo-next" id="lo-next" aria-label="Next class"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      <div class="lo-title">
+        <div class="lo-role" id="lo-role"></div>
+        <h1 class="lo-name" id="lo-name"></h1>
+        <div class="lo-dots" id="lo-dots"></div>
+      </div>
+    </div>
+    <div class="lo-passive" id="lo-passive"></div>
+    <div class="lo-variants" id="lo-variants" role="radiogroup" aria-label="Piece"></div>
+
+    <div class="sheet" id="sheet">
+      <nav class="tabs" id="tabs" role="tablist">
+        <button role="tab" data-tab="stats">Stats<i class="tab-badge" id="tb-stats"></i></button>
+        <button role="tab" data-tab="gb">Gamebreaker</button>
+        <button role="tab" data-tab="deck">Deck<i class="tab-badge" id="tb-deck"></i></button>
+        <button role="tab" data-tab="presets">Presets</button>
+        <span class="tab-ink" id="tab-ink"></span>
+      </nav>
+      <div class="tab-body" id="tab-body">
+        <div class="pane" data-pane="stats" id="pane-stats"></div>
+        <div class="pane" data-pane="gb" id="pane-gb"></div>
+        <div class="pane" data-pane="deck" id="pane-deck"></div>
+        <div class="pane" data-pane="presets" id="pane-presets"></div>
+      </div>
+    </div>
+
+    <div class="play-bar">
+      <button class="btn-play" id="play"><span class="play-label">Play</span><span class="play-reason" id="play-reason"></span></button>
+    </div>
+  </section>
+
+  <!-- ============ MATCH ============ -->
+  <section id="match" class="screen hidden" aria-label="Match">
+    <div id="stage"></div>
+    <div id="overlay"></div>
+
+    <header id="hud-top">
+      <div class="ht-row">
+        <div class="ht-pill ht-round"><small>Round</small><b id="ht-round">1</b></div>
+        <div class="ht-pill ht-ring" id="ht-ring-pill"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg><span id="ht-ring">Ring in 3</span></div>
+        <div class="ht-pill ht-alive"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><b id="ht-alive">8</b></div>
+        <button class="ht-btn" id="ht-speed" aria-label="Toggle fast forward" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 6l8 6-8 6zM12 6l8 6-8 6z"/></svg><span>1×</span></button>
+        <button class="ht-btn" id="ht-menu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button>
+      </div>
+      <div class="ht-strip" id="ht-strip"></div>
+    </header>
+
+    <div id="banners" aria-live="polite"></div>
+    <div id="spectate-chip" class="spectate-chip hidden"><span class="live-dot"></span>Spectating<button id="spec-leave">Leave</button></div>
+
+    <footer id="hud-bottom">
+      <div class="hb-context" id="hb-context">
+        <div class="log" id="log" role="log" aria-label="Combat log"><button class="log-toggle" id="log-toggle" aria-label="Expand log"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><div class="log-lines" id="log-lines"></div></div>
+        <div class="detail hidden" id="detail"></div>
+      </div>
+      <div class="hand" id="hand"></div>
+      <div class="hb-bar">
+        <button class="btn-move" id="btn-move"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Move</span></button>
+        <div class="hb-vitals">
+          <div class="hp-bar" id="hp-bar"><i class="hp-fill" id="hp-fill"></i><i class="hp-shield" id="hp-shield"></i><span id="hp-text">40 / 40</span></div>
+          <div class="energy" id="energy" aria-label="Energy"></div>
+        </div>
+        <button class="btn-gb" id="btn-gb" aria-label="Gamebreaker"><span class="gb-ring" id="gb-ring"></span><span class="gb-core"><b id="gb-icon">✦</b><small id="gb-pct">0%</small></span></button>
+        <button class="btn-end" id="btn-end">End<br>Turn</button>
+      </div>
+    </footer>
+  </section>
+
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*__SCRIPTS__*/
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "last-tile",
+  "version": "1.0.0",
+  "description": "LAST TILE: mobile battle royale tactics card game",
+  "main": "build.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "node build.js",
+    "test": "node test/rules.js && node test/headless.js 200"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "devDependencies": {
+    "three": "0.128.0"
+  }
+}

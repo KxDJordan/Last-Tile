@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LAST TILE - VIEW with real CORE (8 bots)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #fff; }
+  #stage, #overlay { position: absolute; inset: 0; } #overlay { pointer-events: none; }
+  #info { position: absolute; left: 8px; top: 8px; font: 700 12px Inter, sans-serif; text-shadow: 0 1px 2px #000; }
+</style>
+</head>
+<body>
+<div id="stage"></div><div id="overlay"></div><div id="info"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../src/data.js"></script>
+<script src="../src/core.js"></script>
+<script src="../src/ai.js"></script>
+<script src="../src/view.js"></script>
+<script>
+(function () {
+  var Q = new URLSearchParams(location.search), seed = +(Q.get('seed') || 11), spd = +(Q.get('speed') || 4);
+  var rng = CORE.mulberry32(seed);
+  var loadouts = DATA.CLASS_IDS.concat(DATA.CLASS_IDS.slice(0, 2)).map(function (c) { return DATA.randomLoadout(rng, c); });
+  var controllers = loadouts.map(function () { return AI.createController({ delay: 120 }); });
+  var calls = {}, view = {};
+  Object.keys(CORE.stubView()).forEach(function (k) {
+    view[k] = function () { calls[k] = (calls[k] || 0) + 1; var f = VIEW[k]; return f ? f.apply(VIEW, arguments) : Promise.resolve(); };
+  });
+  var origFx = view.fx; view.fx = function (t, d) { calls['fx:' + t + (t === 'gamebreaker' ? ':' + d.gb : '')] = (calls['fx:' + t] || 0) + 1; return origFx(t, d); };
+  view.banner = function (t) { document.getElementById('info').textContent = t; return Promise.resolve(); };
+  VIEW.mount(document.getElementById('stage'), document.getElementById('overlay'));
+  VIEW.setSpeed(spd); VIEW.setHumanId(-1);
+  var game = new CORE.Game({ loadouts: loadouts, seed: seed, view: view, controllers: controllers, humanIndex: -1 });
+  window.REAL = { game: game, calls: calls };
+  game.run().then(function (res) { window.REAL.result = res; window.REAL_DONE = true; }, function (e) { window.REAL.error = String(e && e.stack || e); window.REAL_DONE = true; });
+})();
+</script>
+</body>
+</html>
